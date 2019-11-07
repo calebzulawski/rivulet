@@ -8,7 +8,7 @@ pub trait Sink: Sized + Sync {
     type Item;
 
     /// Returns the writable buffer.
-    fn as_slice(&self) -> & [Self::Item];
+    fn as_slice(&self) -> &[Self::Item];
 
     /// Returns the writable buffer.
     fn as_slice_mut(&mut self) -> &mut [Self::Item];

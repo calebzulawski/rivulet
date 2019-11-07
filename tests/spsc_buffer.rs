@@ -1,6 +1,6 @@
+use rand::Rng;
 use rivulet::buffer::spsc;
 use rivulet::stream::{Sink, Source};
-use rand::Rng;
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
@@ -22,7 +22,7 @@ async fn spsc_buffer_integrity() {
         sink.advance(block, 0).await.unwrap();
         return (total, hasher.finish());
     }
-    
+
     async fn read(mut source: spsc::BufferSource<i64>) -> (usize, u64) {
         let mut hasher = seahash::SeaHasher::new();
         let mut rng = rand::thread_rng();
@@ -36,8 +36,8 @@ async fn spsc_buffer_integrity() {
                     }
                     total += source.len();
                     source
-                },
-                None => return (total, hasher.finish())
+                }
+                None => return (total, hasher.finish()),
             };
         }
     }
