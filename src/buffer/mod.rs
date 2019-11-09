@@ -1,13 +1,14 @@
 //! Buffers for temporarily caching data.
 
+pub mod spmc;
 pub mod spsc;
 
 use slice_deque::Buffer;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, Mutex, RwLock,
+    Arc, Mutex, RwLock, Weak,
 };
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 struct State<T> {
     buffer: Buffer<T>,
@@ -140,7 +141,7 @@ impl<T> SinkImpl<T> {
 struct MultiSource {
     head: Arc<AtomicUsize>,
     heads: Arc<RwLock<Vec<Arc<AtomicUsize>>>>,
-    senders: Arc<Mutex<Vec<Sender<()>>>>,
+    senders: Weak<Mutex<Vec<Sender<()>>>>,
 }
 
 struct SourceImpl<T> {
@@ -149,6 +150,38 @@ struct SourceImpl<T> {
     trigger_receiver: Receiver<()>,
     trigger_sender: Sender<()>,
     multi_source: Option<MultiSource>,
+}
+
+impl<T> Clone for SourceImpl<T> {
+    fn clone(&self) -> Self {
+        let multi_source = self.multi_source.as_ref().unwrap();
+
+        // Copy the head value for the new source
+        let head = Arc::new(AtomicUsize::new(multi_source.head.load(Ordering::Relaxed)));
+
+        // Add the new head
+        multi_source.heads.write().unwrap().push(head.clone());
+
+        // Create the new trigger channel
+        let (sender, receiver) = channel(1);
+
+        // Add the trigger sender to the source
+        if let Some(senders) = multi_source.senders.upgrade() {
+            senders.lock().unwrap().push(sender);
+        }
+
+        Self {
+            state: self.state.clone(),
+            size: self.size,
+            trigger_receiver: receiver,
+            trigger_sender: self.trigger_sender.clone(),
+            multi_source: Some(MultiSource {
+                head,
+                heads: multi_source.heads.clone(),
+                senders: multi_source.senders.clone(),
+            }),
+        }
+    }
 }
 
 impl<T> SourceImpl<T> {
@@ -172,11 +205,11 @@ impl<T> SourceImpl<T> {
             assert!(!heads.is_empty());
             // Repeatedly find the earliest head until the store is consistent
             loop {
-                let current_head = self.state.head.load(Ordering::AcqRel);
+                let current_head = self.state.head.load(Ordering::Acquire);
                 let mut earliest_head = std::usize::MAX;
                 let mut smallest_distance = std::usize::MAX;
                 for head in heads.iter() {
-                    let this_head = head.load(Ordering::AcqRel);
+                    let this_head = head.load(Ordering::Acquire);
                     let this_distance = self.state.distance(current_head, this_head);
                     if this_distance < smallest_distance {
                         earliest_head = this_head;
