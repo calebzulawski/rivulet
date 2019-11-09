@@ -152,6 +152,19 @@ struct SourceImpl<T> {
     multi_source: Option<MultiSource>,
 }
 
+impl<T> Drop for SourceImpl<T> {
+    fn drop(&mut self) {
+        // If there are multiple sources, remove this source from the head list
+        if let Some(multi_source) = &self.multi_source {
+            multi_source
+                .heads
+                .write()
+                .unwrap()
+                .retain(|x| !Arc::ptr_eq(x, &multi_source.head));
+        }
+    }
+}
+
 impl<T> Clone for SourceImpl<T> {
     fn clone(&self) -> Self {
         let multi_source = self.multi_source.as_ref().unwrap();
