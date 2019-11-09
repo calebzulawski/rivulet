@@ -6,7 +6,7 @@ pub mod spsc;
 use slice_deque::Buffer;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, Mutex, RwLock, Weak,
+    Arc, Mutex, Weak,
 };
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
@@ -39,8 +39,8 @@ impl<T: Default> State<T> {
 }
 
 impl<T> State<T> {
-    fn head_ptr(&self) -> *const T {
-        unsafe { self.buffer.ptr().add(self.head.load(Ordering::Relaxed)) }
+    fn offset_ptr(&self, offset: usize) -> *const T {
+        unsafe { self.buffer.ptr().add(offset % self.size) }
     }
 
     fn tail_ptr(&self) -> *mut T {
@@ -48,8 +48,8 @@ impl<T> State<T> {
     }
 
     fn advance_value(&self, advance: usize, value: &AtomicUsize) {
-        let new_value = (value.load(Ordering::Relaxed) + advance) % self.size;
-        value.store(new_value, Ordering::Relaxed);
+        let new_value = (value.load(Ordering::Acquire) + advance) % self.size;
+        value.store(new_value, Ordering::Release);
     }
 
     fn distance(&self, first: usize, second: usize) -> usize {
@@ -57,13 +57,9 @@ impl<T> State<T> {
     }
 
     fn writable_len(&self) -> usize {
-        self.size - self.readable_len() - 1
-    }
-
-    fn readable_len(&self) -> usize {
         self.distance(
-            self.head.load(Ordering::Relaxed),
-            self.tail.load(Ordering::Relaxed),
+            self.tail.load(Ordering::Acquire),
+            self.head.load(Ordering::Acquire) + self.size - 1,
         )
     }
 }
@@ -140,7 +136,7 @@ impl<T> SinkImpl<T> {
 
 struct MultiSource {
     head: Arc<AtomicUsize>,
-    heads: Arc<RwLock<Vec<Arc<AtomicUsize>>>>,
+    heads: Arc<Mutex<Vec<Arc<AtomicUsize>>>>,
     senders: Weak<Mutex<Vec<Sender<()>>>>,
 }
 
@@ -158,7 +154,7 @@ impl<T> Drop for SourceImpl<T> {
         if let Some(multi_source) = &self.multi_source {
             multi_source
                 .heads
-                .write()
+                .lock()
                 .unwrap()
                 .retain(|x| !Arc::ptr_eq(x, &multi_source.head));
         }
@@ -170,10 +166,10 @@ impl<T> Clone for SourceImpl<T> {
         let multi_source = self.multi_source.as_ref().unwrap();
 
         // Copy the head value for the new source
-        let head = Arc::new(AtomicUsize::new(multi_source.head.load(Ordering::Relaxed)));
+        let head = Arc::new(AtomicUsize::new(multi_source.head.load(Ordering::Acquire)));
 
         // Add the new head
-        multi_source.heads.write().unwrap().push(head.clone());
+        multi_source.heads.lock().unwrap().push(head.clone());
 
         // Create the new trigger channel
         let (sender, receiver) = channel(1);
@@ -213,35 +209,31 @@ impl<T> SourceImpl<T> {
         );
 
         let head = if let Some(multi_source) = &self.multi_source {
+            // Advance just this head
             self.state.advance_value(advance, &multi_source.head);
-            let heads = multi_source.heads.read().unwrap();
+
+            // Find the earliest head in the list
+            let heads = multi_source.heads.lock().unwrap();
             assert!(!heads.is_empty());
-            // Repeatedly find the earliest head until the store is consistent
-            loop {
-                let current_head = self.state.head.load(Ordering::Acquire);
-                let mut earliest_head = std::usize::MAX;
-                let mut smallest_distance = std::usize::MAX;
-                for head in heads.iter() {
-                    let this_head = head.load(Ordering::Acquire);
-                    let this_distance = self.state.distance(current_head, this_head);
-                    if this_distance < smallest_distance {
-                        earliest_head = this_head;
-                        smallest_distance = this_distance;
-                    }
-                }
-                let current =
-                    self.state
-                        .head
-                        .compare_and_swap(current_head, earliest_head, Ordering::AcqRel);
-                if current == current_head {
-                    break;
+            let current_head = self.state.head.load(Ordering::Acquire);
+            let mut earliest_head = std::usize::MAX;
+            let mut smallest_distance = std::usize::MAX;
+            for head in heads.iter() {
+                let this_head = head.load(Ordering::Acquire);
+                let this_distance = self.state.distance(current_head, this_head);
+                if this_distance < smallest_distance {
+                    earliest_head = this_head;
+                    smallest_distance = this_distance;
                 }
             }
-            multi_source.head.load(Ordering::Relaxed)
+
+            // Discard up to the earliest head
+            self.state.head.store(earliest_head, Ordering::Release);
+            multi_source.head.load(Ordering::Acquire)
         } else {
             // Directly update the head
             self.state.advance_value(advance, &self.state.head);
-            self.state.head.load(Ordering::Relaxed)
+            self.state.head.load(Ordering::Acquire)
         };
 
         // Notify sink that space is available
@@ -268,8 +260,68 @@ impl<T> SourceImpl<T> {
         if self.size == 0 {
             None
         } else {
-            let ptr = self.state.head_ptr();
+            let ptr = self.state.offset_ptr(head);
             Some(unsafe { std::slice::from_raw_parts(ptr, self.size) })
         }
     }
+}
+
+fn spmc_buffer<T: Send + Sync + Default + 'static>(
+    min_size: usize,
+) -> (SinkImpl<T>, SourceImpl<T>) {
+    assert!(min_size > 0, "`min_size` must be greater than 0");
+    let state = Arc::new(State::new(min_size));
+
+    let (sink_sender, source_receiver) = channel(1);
+    let (source_sender, sink_receiver) = channel(1);
+
+    let senders = Arc::new(Mutex::new(vec![sink_sender]));
+    let head = Arc::new(AtomicUsize::new(0));
+    let heads = Arc::new(Mutex::new(vec![head.clone()]));
+
+    (
+        SinkImpl {
+            state: state.clone(),
+            size: 0,
+            trigger_receiver: sink_receiver,
+            trigger_sender: MultiSender::Multiple(senders.clone()),
+        },
+        SourceImpl {
+            state,
+            size: 0,
+            trigger_receiver: source_receiver,
+            trigger_sender: source_sender,
+            multi_source: Some(MultiSource {
+                head,
+                heads,
+                senders: Arc::downgrade(&senders),
+            }),
+        },
+    )
+}
+
+fn spsc_buffer<T: Send + Sync + Default + 'static>(
+    min_size: usize,
+) -> (SinkImpl<T>, SourceImpl<T>) {
+    assert!(min_size > 0, "`min_size` must be greater than 0");
+    let state = Arc::new(State::new(min_size));
+
+    let (sink_sender, source_receiver) = channel(1);
+    let (source_sender, sink_receiver) = channel(1);
+
+    (
+        SinkImpl {
+            state: state.clone(),
+            size: 0,
+            trigger_receiver: sink_receiver,
+            trigger_sender: MultiSender::Single(Box::new(sink_sender)),
+        },
+        SourceImpl {
+            state,
+            size: 0,
+            trigger_receiver: source_receiver,
+            trigger_sender: source_sender,
+            multi_source: None,
+        },
+    )
 }

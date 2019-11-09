@@ -1,10 +1,8 @@
 //! A single-producer, single-consumer async buffer.
 
-use crate::buffer::{MultiSender, SinkImpl, SourceImpl, State};
+use crate::buffer::{spsc_buffer, SinkImpl, SourceImpl};
 use crate::stream::{Sink, Source};
 use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::mpsc::channel;
 
 /// Creates a single-producer, single-consumer async buffer.
 ///
@@ -14,31 +12,8 @@ use tokio::sync::mpsc::channel;
 pub fn buffer<T: Send + Sync + Default + 'static>(
     min_size: usize,
 ) -> (BufferSink<T>, BufferSource<T>) {
-    assert!(min_size > 0, "`min_size` must be greater than 0");
-    let state = Arc::new(State::new(min_size));
-
-    let (sink_sender, source_receiver) = channel(1);
-    let (source_sender, sink_receiver) = channel(1);
-
-    (
-        BufferSink::<T> {
-            sink: SinkImpl {
-                state: state.clone(),
-                size: 0,
-                trigger_receiver: sink_receiver,
-                trigger_sender: MultiSender::Single(Box::new(sink_sender)),
-            },
-        },
-        BufferSource::<T> {
-            source: SourceImpl {
-                state,
-                size: 0,
-                trigger_receiver: source_receiver,
-                trigger_sender: source_sender,
-                multi_source: None,
-            },
-        },
-    )
+    let (sink, source) = spsc_buffer(min_size);
+    (BufferSink { sink }, BufferSource { source })
 }
 
 /// Write values to the associated `BufferSource`.
