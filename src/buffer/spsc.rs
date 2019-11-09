@@ -3,8 +3,6 @@
 use crate::stream::{Sink, Source};
 use async_trait::async_trait;
 use slice_deque::Buffer;
-use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::slice::SliceIndex;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -112,25 +110,13 @@ pub struct BufferSink<T: Send + Sync + 'static> {
 impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
     type Item = T;
 
-    fn as_slice(&self) -> &[T] {
-        let ptr = self.state.tail_ptr();
-        let size = self.len();
-        unsafe { std::slice::from_raw_parts(ptr, size) }
-    }
-
-    fn as_slice_mut(&mut self) -> &mut [T] {
-        let ptr = self.state.tail_ptr();
-        let size = self.len();
-        unsafe { std::slice::from_raw_parts_mut(ptr, size) }
-    }
-
     fn len(&self) -> usize {
         self.size
     }
 
-    async fn advance(mut self, advance: usize, size: usize) -> Option<Self> {
+    async fn advance(&mut self, advance: usize, size: usize) -> Option<&mut [T]> {
         assert!(
-            advance <= self.len(),
+            advance <= self.size,
             "cannot advance past end of write buffer"
         );
         assert!(
@@ -143,45 +129,23 @@ impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
         // If the source is gone, there's no point sinking more data
         if let Err(e) = self.trigger_sender.try_send(()) {
             if e.is_closed() {
+                self.size = 0;
                 return None;
             }
         }
 
         // Wait for enough room to advance
         while self.state.writable_len() < size {
-            self.trigger_receiver.recv().await?;
+            if self.trigger_receiver.recv().await.is_none() {
+                self.size = 0;
+                return None;
+            }
         }
-        Some(BufferSink::<T> { size, ..self })
-    }
-}
+        self.size = size;
 
-impl<T: Send + Sync + 'static, I: SliceIndex<[T]>> Index<I> for BufferSink<T> {
-    type Output = I::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        Index::index(&**self, index)
-    }
-}
-
-impl<T: Send + Sync + 'static, I: SliceIndex<[T]>> IndexMut<I> for BufferSink<T> {
-    #[inline]
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        IndexMut::index_mut(&mut **self, index)
-    }
-}
-
-impl<T: Send + Sync + 'static> Deref for BufferSink<T> {
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        Sink::as_slice(self)
-    }
-}
-
-impl<T: Send + Sync + 'static> DerefMut for BufferSink<T> {
-    fn deref_mut(&mut self) -> &mut [T] {
-        self.as_slice_mut()
+        // Return the mutable slice
+        let ptr = self.state.tail_ptr();
+        Some(unsafe { std::slice::from_raw_parts_mut(ptr, self.size) })
     }
 }
 
@@ -201,19 +165,13 @@ pub struct BufferSource<T> {
 impl<T: Send + Sync + 'static> Source for BufferSource<T> {
     type Item = T;
 
-    fn as_slice(&self) -> &[T] {
-        let ptr = self.state.head_ptr();
-        let size = self.len();
-        unsafe { std::slice::from_raw_parts(ptr, size) }
-    }
-
     fn len(&self) -> usize {
         self.size
     }
 
-    async fn advance(mut self, advance: usize, size: usize) -> Option<Self> {
+    async fn advance(&mut self, advance: usize, size: usize) -> Option<&[T]> {
         assert!(
-            advance <= self.len(),
+            advance <= self.size,
             "cannot advance past end of read buffer"
         );
         assert!(
@@ -229,34 +187,18 @@ impl<T: Send + Sync + 'static> Source for BufferSource<T> {
         // Wait for enough data to read
         while self.state.readable_len() < size {
             if self.trigger_receiver.recv().await.is_none() {
-                let available = self.state.readable_len();
-                if available == 0 {
+                if self.state.readable_len() == 0 {
+                    self.size = 0;
                     return None;
                 } else {
-                    return Some(BufferSource::<T> {
-                        size: std::cmp::min(available, size),
-                        ..self
-                    });
+                    break;
                 }
             }
         }
-        Some(BufferSource::<T> { size, ..self })
-    }
-}
+        self.size = std::cmp::min(self.state.readable_len(), size);
 
-impl<T: Send + Sync + 'static, I: SliceIndex<[T]>> Index<I> for BufferSource<T> {
-    type Output = I::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        Index::index(&**self, index)
-    }
-}
-
-impl<T: Send + Sync + 'static> Deref for BufferSource<T> {
-    type Target = [T];
-
-    fn deref(&self) -> &[T] {
-        Source::as_slice(self)
+        // Return the slice
+        let ptr = self.state.head_ptr();
+        Some(unsafe { std::slice::from_raw_parts(ptr, self.size) })
     }
 }
