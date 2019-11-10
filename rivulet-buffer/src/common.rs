@@ -1,8 +1,3 @@
-//! Buffers for temporarily caching data.
-
-pub mod spmc;
-pub mod spsc;
-
 use slice_deque::Buffer;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -69,7 +64,7 @@ enum MultiSender {
     Multiple(Arc<Mutex<Vec<Sender<()>>>>),
 }
 
-struct SinkImpl<T> {
+pub(crate) struct SinkImpl<T> {
     state: Arc<State<T>>,
     trigger_receiver: Receiver<()>,
     trigger_sender: MultiSender,
@@ -77,11 +72,11 @@ struct SinkImpl<T> {
 }
 
 impl<T> SinkImpl<T> {
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.size
     }
 
-    async fn advance(&mut self, advance: usize, size: usize) -> Option<&mut [T]> {
+    pub async fn advance(&mut self, advance: usize, size: usize) -> Option<&mut [T]> {
         assert!(
             advance <= self.size,
             "cannot advance past end of write buffer"
@@ -140,7 +135,7 @@ struct MultiSource {
     senders: Weak<Mutex<Vec<Sender<()>>>>,
 }
 
-struct SourceImpl<T> {
+pub(crate) struct SourceImpl<T> {
     state: Arc<State<T>>,
     size: usize,
     trigger_receiver: Receiver<()>,
@@ -194,11 +189,11 @@ impl<T> Clone for SourceImpl<T> {
 }
 
 impl<T> SourceImpl<T> {
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.size
     }
 
-    async fn advance(&mut self, advance: usize, size: usize) -> Option<&[T]> {
+    pub async fn advance(&mut self, advance: usize, size: usize) -> Option<&[T]> {
         assert!(
             advance <= self.size,
             "cannot advance past end of read buffer"
@@ -266,7 +261,7 @@ impl<T> SourceImpl<T> {
     }
 }
 
-fn spmc_buffer<T: Send + Sync + Default + 'static>(
+pub(crate) fn spmc_buffer<T: Send + Sync + Default + 'static>(
     min_size: usize,
 ) -> (SinkImpl<T>, SourceImpl<T>) {
     assert!(min_size > 0, "`min_size` must be greater than 0");
@@ -300,7 +295,7 @@ fn spmc_buffer<T: Send + Sync + Default + 'static>(
     )
 }
 
-fn spsc_buffer<T: Send + Sync + Default + 'static>(
+pub(crate) fn spsc_buffer<T: Send + Sync + Default + 'static>(
     min_size: usize,
 ) -> (SinkImpl<T>, SourceImpl<T>) {
     assert!(min_size > 0, "`min_size` must be greater than 0");

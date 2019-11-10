@@ -1,15 +1,6 @@
-[package]
-name = "rivulet"
-version = "0.1.0"
-authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-slice-deque = "0.3"
-async-trait = "0.1.17"
-tokio = "0.2.0-alpha.6"
-
-[dev-dependencies]
-seahash = "3"
-rand = { version = "0.7", features = ["small_rng"] }
-futures = "0.3"
+[workspace]
+members = [
+    "rivulet",
+    "rivulet-core",
+    "rivulet-buffer",
+]

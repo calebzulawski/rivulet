@@ -1,0 +1,11 @@
+[package]
+name = "rivulet-buffer"
+version = "0.1.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rivulet-core = { version = "0.1", path = "../rivulet-core" }
+slice-deque = "0.3"
+tokio = "0.2.0-alpha.6"
+async-trait = "0.1.17"

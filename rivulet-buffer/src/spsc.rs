@@ -1,10 +1,10 @@
-//! A single-producer, multiple-consumer async buffer.
+//! A single-producer, single-consumer async buffer.
 
-use crate::buffer::{spmc_buffer, SinkImpl, SourceImpl};
-use crate::stream::{Sink, Source};
+use crate::common::{spsc_buffer, SinkImpl, SourceImpl};
 use async_trait::async_trait;
+use rivulet_core::stream::{Sink, Source};
 
-/// Creates a single-producer, multiple-consumer async buffer.
+/// Creates a single-producer, single-consumer async buffer.
 ///
 /// The buffer can store at least `min_size` elements, but might hold more.
 /// # Panics
@@ -12,11 +12,11 @@ use async_trait::async_trait;
 pub fn buffer<T: Send + Sync + Default + 'static>(
     min_size: usize,
 ) -> (BufferSink<T>, BufferSource<T>) {
-    let (sink, source) = spmc_buffer(min_size);
+    let (sink, source) = spsc_buffer(min_size);
     (BufferSink { sink }, BufferSource { source })
 }
 
-/// Write values to the associated `BufferSource`s.
+/// Write values to the associated `BufferSource`.
 ///
 /// Created by the [`buffer`] function.
 ///
@@ -43,7 +43,6 @@ impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
 /// Created by the [`buffer`] function.
 ///
 /// [`buffer`]: fn.buffer.html
-#[derive(Clone)]
 pub struct BufferSource<T> {
     source: SourceImpl<T>,
 }
