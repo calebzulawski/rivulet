@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 async-trait = "0.1.17"
+region = "2.1"

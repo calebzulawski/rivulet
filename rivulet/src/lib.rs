@@ -5,4 +5,6 @@ pub mod buffer {
     pub use rivulet_buffer::{spmc, spsc};
 }
 
+pub use rivulet_core::transform;
+
 pub use rivulet_core::stream::{Sink, Source};
