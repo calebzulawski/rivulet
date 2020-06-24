@@ -7,9 +7,3 @@ edition = "2018"
 [dependencies]
 rivulet-core = { version = "0.1", path = "../rivulet-core" }
 rivulet-buffer = { version = "0.1", path = "../rivulet-buffer" }
-
-[dev-dependencies]
-seahash = "3"
-rand = { version = "0.7", features = ["small_rng"] }
-futures = "0.3"
-tokio = "0.2.0-alpha.6"

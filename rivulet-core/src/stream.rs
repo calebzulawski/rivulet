@@ -1,76 +1,142 @@
 //! Traits defining common stream interfaces.
 
-use async_trait::async_trait;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-/// Provides a writable buffer of indeterminate length that can be written to in contiguous chunks.
-#[async_trait]
-pub trait Sink {
-    type Item;
+#[derive(Debug)]
+pub enum Error {
+    Closed,
+    Overflow,
+    Other(Box<dyn std::error::Error>),
+}
 
-    /// Returns the length of the current slice into the writable buffer.
-    fn len(&self) -> usize;
-
-    /// Returns true if the current slice into the writable buffer is empty.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Asynchronously consumes `advance` elements in the writable buffer and returns a slice to
-    /// the next `size` elements.  Returns `None` if the stream has terminated and no more data is
-    /// needed.
-    ///
-    /// `advance` is permitted to be less than `size`, returning an overlapping slice, but if
-    /// `advance` is more than `size` the implementation may panic.
-    async fn advance(&mut self, advance: usize, size: usize) -> Option<&mut [Self::Item]>;
-
-    /// Asynchronously consumes the current slice into the writable buffer and returns the next
-    /// slice into the buffer of size `size`.  Returns `None` if the stream has terminated and no
-    /// more data is needed.
-    async fn next(&mut self, size: usize) -> Option<&mut [Self::Item]> {
-        let advance = self.len();
-        self.advance(advance, size).await
-    }
-
-    /// Asynchronously resizes the current slice into the writable buffer without committing any
-    /// elements.  Returns `None` if the stream has terminated and no more data is needed.
-    async fn resize(&mut self, size: usize) -> Option<&mut [Self::Item]> {
-        self.advance(0, size).await
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Closed => writeln!(f, "the stream has been closed"),
+            Self::Overflow => writeln!(f, "buffer overflow"),
+            Self::Other(err) => writeln!(f, "{}", err),
+        }
     }
 }
 
-/// Provides a view into a stream of indeterminate length that can be read in contiguous chunks.
-#[async_trait]
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Other(ref err) => err.source(),
+            _ => None,
+        }
+    }
+}
+
+/// The return status of a `Sink` or `Source`.
+#[derive(Debug)]
+pub enum Status<T> {
+    /// The data is ready.
+    Ready(T),
+    /// The `Sink` or `Source` has terminated, but a partial slice might be available.
+    Incomplete(T),
+}
+
+impl<T> Status<T> {
+    /// Unwrap the `Ready` state, ignoring the `Incomplete` state.
+    pub fn ready(self) -> Option<T> {
+        match self {
+            Self::Ready(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Unwraps the inner value regardless of status.
+    pub fn into_inner(self) -> T {
+        match self {
+            Self::Ready(v) => v,
+            Self::Incomplete(v) => v,
+        }
+    }
+}
+
+impl<'a, T> Status<&'a [T]> {
+    /// Unwraps the inner slice if it isn't empty.
+    pub fn nonempty(self) -> Option<&'a [T]> {
+        let inner = self.into_inner();
+        if inner.len() == 0 {
+            None
+        } else {
+            Some(inner)
+        }
+    }
+}
+
+impl<'a, T> Status<&'a mut [T]> {
+    /// Unwraps the inner slice if it isn't empty.
+    pub fn nonempty(self) -> Option<&'a mut [T]> {
+        let inner = self.into_inner();
+        if inner.len() == 0 {
+            None
+        } else {
+            Some(inner)
+        }
+    }
+}
+
+impl<T, U> AsRef<[T]> for Status<U>
+where
+    U: AsRef<[T]>,
+{
+    fn as_ref(&self) -> &[T] {
+        match self {
+            Self::Ready(v) => v.as_ref(),
+            Self::Incomplete(v) => v.as_ref(),
+        }
+    }
+}
+
+impl<T, U> AsMut<[T]> for Status<U>
+where
+    U: AsMut<[T]>,
+{
+    fn as_mut(&mut self) -> &mut [T] {
+        match self {
+            Self::Ready(v) => v.as_mut(),
+            Self::Incomplete(v) => v.as_mut(),
+        }
+    }
+}
+
+pub trait Sink {
+    type Item;
+
+    fn poll_reserve(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<&mut [Self::Item], Error>>;
+
+    fn poll_commit(self: Pin<&mut Self>, cx: &mut Context, count: usize)
+        -> Poll<Result<(), Error>>;
+}
+
 pub trait Source {
     type Item;
 
-    /// Returns the length of the current slice into the stream.
-    fn len(&self) -> usize;
+    fn poll_request(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<Status<&[Self::Item]>, Error>>;
 
-    /// Returns true if the current slice into the stream is empty.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    fn poll_consume(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<(), Error>>;
+}
 
-    /// Asynchronously advances the view into the stream by `advance` elements and returns a new
-    /// slice of size `size`, or fewer elements if the stream has terminated.  Returns `None` if
-    /// the stream has terminated and no more data is available.
-    ///
-    /// `advance` is permitted to be less than `size`, returning an overlapping slice, but if
-    /// `advance` is more than `size` the implementation may panic.
-    async fn advance(&mut self, advance: usize, size: usize) -> Option<&[Self::Item]>;
-
-    /// Asynchronously advances past the current slice and returns a new slice of size `size`, or
-    /// fewer elements if the stream has terminated.  Returns `None` if the stream has terminated
-    /// and no more data is available.
-    async fn next(&mut self, size: usize) -> Option<&[Self::Item]> {
-        let advance = self.len();
-        self.advance(advance, size).await
-    }
-
-    /// Asynchronously resizes the current slice into the stream to `size`, or fewer elements if
-    /// the stream has terminated.  Returns `None` if the stream has terminated and no more
-    /// elements are available.
-    async fn resize(&mut self, size: usize) -> Option<&[Self::Item]> {
-        self.advance(0, size).await
-    }
+pub trait SourceMut: Source {
+    fn poll_request_mut(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<Status<&mut [Self::Item]>, Error>>;
 }

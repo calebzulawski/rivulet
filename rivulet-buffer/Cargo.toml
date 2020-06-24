@@ -7,5 +7,9 @@ edition = "2018"
 [dependencies]
 rivulet-core = { version = "0.1", path = "../rivulet-core" }
 slice-deque = "0.3"
-tokio = "0.2.0-alpha.6"
-async-trait = "0.1.17"
+futures = "0.3"
+
+[dev-dependencies]
+seahash = "3"
+rand = { version = "0.7", features = ["small_rng"] }
+tokio = { version = "0.2", default-features = false, features = ["sync", "rt-threaded"] }
