@@ -1,6 +1,6 @@
-use futures::{ready, task::AtomicWaker};
+use futures::task::AtomicWaker;
 use pin_project::pin_project;
-use rivulet_core::stream::{Error, Sink, Source, SourceMut, Status};
+use rivulet_core::stream::{Error, Sink, Source, SourceMut};
 use slice_deque::Buffer;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
@@ -119,13 +119,17 @@ impl WakeAll for MultipleWaker {
     }
 }
 
+struct UnboundSlice<T>(*mut T, usize);
+
+unsafe impl<T: Send> Send for UnboundSlice<T> {}
+
 // Implementation of a stream sink
 struct SinkImpl<T, W>
 where
     W: WakeAll,
 {
     state: Arc<State<T, W>>,
-    reserved: Option<usize>, // number of reserved samples
+    reserved: UnboundSlice<T>, // current reservation
 }
 
 impl<T, W> Drop for SinkImpl<T, W>
@@ -142,11 +146,15 @@ impl<T, W> SinkImpl<T, W>
 where
     W: WakeAll,
 {
+    fn sink_impl(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.reserved.0, self.reserved.1) }
+    }
+
     fn poll_reserve_impl(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
-    ) -> Poll<Result<&mut [T], Error>> {
+    ) -> Poll<Result<(), Error>> {
         if count > (self.state.size - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
@@ -169,11 +177,9 @@ where
         }
 
         // Update how much is reserved
-        self.reserved.replace(count);
+        self.reserved = UnboundSlice(self.state.tail_ptr(), count);
 
-        // Return the mutable slice
-        let ptr = self.state.tail_ptr();
-        Poll::Ready(Ok(unsafe { std::slice::from_raw_parts_mut(ptr, count) }))
+        Poll::Ready(Ok(()))
     }
 
     fn poll_commit_impl(
@@ -186,12 +192,8 @@ where
         }
 
         // Ensure that the commit is possible with the current reservation
-        if let Some(reserved) = self.reserved {
-            if count > reserved {
-                return Poll::Ready(Err(Error::Overflow));
-            }
-        } else {
-            panic!("cannot commit before reserving!");
+        if count > self.reserved.1 {
+            return Poll::Ready(Err(Error::Overflow));
         }
 
         // Advance the buffer
@@ -266,9 +268,9 @@ where
     W: WakeAll,
 {
     state: Arc<State<T, W>>,
-    waker: Arc<AtomicWaker>,  // this reader's waker
-    requested: Option<usize>, // the current requested number of elements
-    head: H,                  // the reader(s)'s head(s)
+    waker: Arc<AtomicWaker>,    // this reader's waker
+    requested: UnboundSlice<T>, // the current request
+    head: H,                    // the reader(s)'s head(s)
 }
 
 impl<T, W, H> Drop for SourceImpl<T, W, H>
@@ -308,7 +310,7 @@ impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
         Self {
             state: self.state.clone(),
             waker,
-            requested: None,
+            requested: UnboundSlice(std::ptr::null_mut(), 0),
             head: MultipleHead {
                 head,
                 heads: self.head.heads.clone(),
@@ -322,12 +324,15 @@ where
     H: Head + Unpin,
     W: WakeAll,
 {
-    // requests a pointer
-    fn poll_request_ptr(
+    fn source_impl(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.requested.0, self.requested.1) }
+    }
+
+    fn poll_request_impl(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
-    ) -> Poll<Result<(*mut T, usize), Error>> {
+    ) -> Poll<Result<(), Error>> {
         if count <= (self.state.size - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
@@ -342,40 +347,20 @@ where
             self.waker.register(cx.waker());
 
             // Check if the sink disconnected after registering so we don't miss the notification.
-            // Also, even if the connection is closed, we only want to error if there isn't enough
-            // data available.
-            return if self.state.closed.load(Ordering::Relaxed) {
-                Poll::Ready(Err(Error::Closed))
-            } else {
-                Poll::Pending
-            };
+            // Even if the connection is closed, we only want to error if there isn't enough data available.
+            if !self.state.closed.load(Ordering::Relaxed) {
+                return Poll::Pending;
+            }
         }
 
-        self.requested.replace(count);
+        // Update how much is requested
+        self.requested = UnboundSlice(self.state.offset_ptr(head) as _, available);
 
-        Poll::Ready(Ok((self.state.offset_ptr(head) as _, available)))
-    }
-
-    // all readers support immutable requests
-    fn poll_request_impl(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<Status<&[T]>, Error>> {
-        let (ptr, available) = ready!(self.poll_request_ptr(cx, count))?;
-
-        let slice = if available > 0 {
-            unsafe { std::slice::from_raw_parts(ptr, available) }
+        Poll::Ready(if available < count {
+            Err(Error::Closed)
         } else {
-            &[]
-        };
-
-        // Return the slice
-        Poll::Ready(Ok(if slice.len() < count {
-            Status::Incomplete(slice)
-        } else {
-            Status::Ready(slice)
-        }))
+            Ok(())
+        })
     }
 
     fn poll_consume_impl(
@@ -383,12 +368,8 @@ where
         _: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if let Some(requested) = self.requested {
-            if count > requested {
-                return Poll::Ready(Err(Error::Overflow));
-            }
-        } else {
-            panic!("cannot consume before requesting!");
+        if count > self.requested.1 {
+            return Poll::Ready(Err(Error::Overflow));
         }
 
         // Advance the head
@@ -403,25 +384,8 @@ where
 
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, SingleWaker, SingleHead> {
-    fn poll_request_mut_impl(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<Status<&mut [T]>, Error>> {
-        let (ptr, available) = ready!(self.poll_request_ptr(cx, count))?;
-
-        let slice = if available > 0 {
-            unsafe { std::slice::from_raw_parts_mut(ptr, available) }
-        } else {
-            &mut []
-        };
-
-        // Return the slice
-        Poll::Ready(Ok(if slice.len() < count {
-            Status::Incomplete(slice)
-        } else {
-            Status::Ready(slice)
-        }))
+    fn source_mut_impl(&self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.requested.0, self.requested.1) }
     }
 }
 
@@ -435,7 +399,7 @@ pub mod spmc {
     ///
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn circular_buffer<T: Send + Sync + Default + 'static>(
+    pub fn buffer<T: Send + Sync + Default + 'static>(
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
@@ -449,12 +413,12 @@ pub mod spmc {
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: None,
+                reserved: UnboundSlice(std::ptr::null_mut(), 0),
             }),
             BufferSource(SourceImpl {
                 state,
                 waker,
-                requested: None,
+                requested: UnboundSlice(std::ptr::null_mut(), 0),
                 head: MultipleHead { head, heads },
             }),
         )
@@ -480,11 +444,15 @@ pub mod spmc {
     impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
         type Item = T;
 
+        fn sink(&mut self) -> &mut [Self::Item] {
+            self.0.sink_impl()
+        }
+
         fn poll_reserve(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
-        ) -> Poll<Result<&mut [Self::Item], Error>> {
+        ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
             pinned.0.poll_reserve_impl(cx, count)
         }
@@ -502,11 +470,15 @@ pub mod spmc {
     impl<T> Source for BufferSource<T> {
         type Item = T;
 
+        fn source(&self) -> &[Self::Item] {
+            self.0.source_impl()
+        }
+
         fn poll_request(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
-        ) -> Poll<Result<Status<&[Self::Item]>, Error>> {
+        ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
             pinned.0.poll_request_impl(cx, count)
         }
@@ -531,7 +503,7 @@ pub mod spsc {
     /// The buffer can store at least `min_size` elements, but might hold more.
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn circular_buffer<T: Send + Sync + Default + 'static>(
+    pub fn buffer<T: Send + Sync + Default + 'static>(
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
@@ -541,12 +513,12 @@ pub mod spsc {
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: None,
+                reserved: UnboundSlice(std::ptr::null_mut(), 0),
             }),
             BufferSource(SourceImpl {
                 state,
                 waker,
-                requested: None,
+                requested: UnboundSlice(std::ptr::null_mut(), 0),
                 head: SingleHead,
             }),
         )
@@ -571,11 +543,15 @@ pub mod spsc {
     impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
         type Item = T;
 
+        fn sink(&mut self) -> &mut [Self::Item] {
+            self.0.sink_impl()
+        }
+
         fn poll_reserve(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
-        ) -> Poll<Result<&mut [Self::Item], Error>> {
+        ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
             pinned.0.poll_reserve_impl(cx, count)
         }
@@ -593,11 +569,15 @@ pub mod spsc {
     impl<T> Source for BufferSource<T> {
         type Item = T;
 
+        fn source(&self) -> &[Self::Item] {
+            self.0.source_impl()
+        }
+
         fn poll_request(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
-        ) -> Poll<Result<Status<&[Self::Item]>, Error>> {
+        ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
             pinned.0.poll_request_impl(cx, count)
         }
@@ -613,13 +593,8 @@ pub mod spsc {
     }
 
     impl<T> SourceMut for BufferSource<T> {
-        fn poll_request_mut(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<Status<&mut [Self::Item]>, Error>> {
-            let pinned = self.project();
-            pinned.0.poll_request_mut_impl(cx, count)
+        fn source_mut(&mut self) -> &mut [Self::Item] {
+            self.0.source_mut_impl()
         }
     }
 }

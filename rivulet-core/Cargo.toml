@@ -5,3 +5,4 @@ authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+pin-project = "0.4"

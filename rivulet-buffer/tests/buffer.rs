@@ -1,12 +1,12 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet_buffer::{spmc, spsc};
-use rivulet_core::stream::{Sink, Source};
+use rivulet_buffer::circular_buffer::{spmc, spsc};
+use rivulet_core::stream::{Error, Sink, SinkExt, Source, SourceExt};
 use std::hash::Hasher;
 use tokio::sync::oneshot;
 
 static BUFFER_SIZE: usize = 4096;
 
-async fn write<T: Sink<Item = i64> + Send>(
+async fn write<T: Sink<Item = i64> + Send + Unpin>(
     mut sink: T,
     block: usize,
     count: usize,
@@ -15,22 +15,29 @@ async fn write<T: Sink<Item = i64> + Send>(
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
-        let buffer = sink.next(block).await.unwrap();
-        for value in buffer {
+        sink.reserve(block).await.unwrap();
+        for value in sink.sink() {
             *value = rng.gen();
             hasher.write_i64(*value);
         }
     }
-    sink.advance(block, 0).await.unwrap();
+    sink.commit(block).await.unwrap();
     sender.send(hasher.finish()).unwrap();
 }
 
-async fn read<T: Source<Item = i64> + Send>(mut source: T, sender: oneshot::Sender<u64>) {
+async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
-    while let Some(buffer) = source.next(rng.gen_range(1, BUFFER_SIZE)).await {
-        for value in buffer {
+    loop {
+        let count = rng.gen_range(1, BUFFER_SIZE);
+        let res = source.request(count).await;
+        for value in source.source() {
             hasher.write_i64(*value);
+        }
+        if let Err(Error::Closed) = res {
+            break;
+        } else {
+            res.unwrap()
         }
     }
     sender.send(hasher.finish()).unwrap();
