@@ -8,6 +8,7 @@ edition = "2018"
 rivulet-core = { version = "0.1", path = "../rivulet-core" }
 slice-deque = "0.3"
 futures = "0.3"
+pin-project = "0.4"
 
 [dev-dependencies]
 seahash = "3"

@@ -1,5 +1,6 @@
-use futures::task::AtomicWaker;
-use rivulet_core::stream::{Error, Status};
+use futures::{ready, task::AtomicWaker};
+use pin_project::pin_project;
+use rivulet_core::stream::{Error, Sink, Source, SourceMut, Status};
 use slice_deque::Buffer;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
@@ -9,14 +10,15 @@ use std::sync::{
 };
 use std::task::{Context, Poll};
 
+// Shared state
 struct State<T, W> {
     buffer: Buffer<T>,
-    size: usize,
-    head: AtomicUsize,
-    tail: AtomicUsize,
-    closed: AtomicBool,
-    write_waker: AtomicWaker,
-    read_waker: W,
+    size: usize,              // number of elements in the buffer
+    head: AtomicUsize,        // index of the first written element
+    tail: AtomicUsize,        // index one past the end of the written data
+    closed: AtomicBool,       // true if the stream is closed
+    write_waker: AtomicWaker, // waker stored by the writer when waiting
+    read_waker: W,            // waker(s) stored by the reader(s) when waiting
 }
 
 impl<T: Default, W> State<T, W> {
@@ -47,23 +49,29 @@ impl<T: Default, W> State<T, W> {
 }
 
 impl<T, W> State<T, W> {
+    // compute an offset into the buffer (absolute index)
     fn offset_ptr(&self, offset: usize) -> *const T {
         unsafe { self.buffer.ptr().add(offset % self.size) }
     }
 
+    // return the pointer to the tail
     fn tail_ptr(&self) -> *mut T {
         unsafe { self.buffer.ptr().add(self.tail.load(Ordering::Relaxed)) }
     }
 
+    // advance a buffer index by an amount (such as a head or tail)
     fn advance_value(&self, advance: usize, value: &AtomicUsize) {
         let new_value = (value.load(Ordering::Acquire) + advance) % self.size;
         value.store(new_value, Ordering::Release);
     }
 
+    // compute the distance between two buffer indices
     fn distance(&self, first: usize, second: usize) -> usize {
         (second + self.size - first) % self.size
     }
 
+    // return the number of writable elements
+    // (leaving room for a single marker element, to allow distinguishing empty and full buffers)
     fn writable_len(&self) -> usize {
         self.distance(
             self.tail.load(Ordering::Acquire),
@@ -72,13 +80,17 @@ impl<T, W> State<T, W> {
     }
 }
 
+// Wakes a single reader
 struct SingleWaker(Arc<AtomicWaker>);
 
+// Wakes multiple readers
 struct MultipleWaker(Mutex<Vec<Arc<AtomicWaker>>>);
 
 trait WakeAll {
+    // wake all waiting readers
     fn wake(&self);
 
+    // drop a reader from the stream, returning true if no readers remain
     fn drop(&self, waker: &Arc<AtomicWaker>) -> bool;
 }
 
@@ -107,12 +119,13 @@ impl WakeAll for MultipleWaker {
     }
 }
 
+// Implementation of a stream sink
 struct SinkImpl<T, W>
 where
     W: WakeAll,
 {
     state: Arc<State<T, W>>,
-    reserved: Option<usize>,
+    reserved: Option<usize>, // number of reserved samples
 }
 
 impl<T, W> Drop for SinkImpl<T, W>
@@ -121,7 +134,7 @@ where
 {
     fn drop(&mut self) {
         self.state.closed.store(true, Ordering::Relaxed);
-        self.state.read_waker.wake();
+        self.state.read_waker.wake(); // waiting readers can exit without sufficient data
     }
 }
 
@@ -129,7 +142,7 @@ impl<T, W> SinkImpl<T, W>
 where
     W: WakeAll,
 {
-    fn poll_reserve(
+    fn poll_reserve_impl(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
@@ -143,6 +156,7 @@ where
             return Poll::Ready(Err(Error::Closed));
         }
 
+        // Wait until enough room to write
         if self.state.writable_len() < count {
             self.state.write_waker.register(cx.waker());
 
@@ -162,10 +176,16 @@ where
         Poll::Ready(Ok(unsafe { std::slice::from_raw_parts_mut(ptr, count) }))
     }
 
-    fn poll_commit(self: Pin<&mut Self>, _: &mut Context, count: usize) -> Poll<Result<(), Error>> {
+    fn poll_commit_impl(
+        self: Pin<&mut Self>,
+        _: &mut Context,
+        count: usize,
+    ) -> Poll<Result<(), Error>> {
         if count == 0 {
             return Poll::Ready(Ok(()));
         }
+
+        // Ensure that the commit is possible with the current reservation
         if let Some(reserved) = self.reserved {
             if count > reserved {
                 return Poll::Ready(Err(Error::Overflow));
@@ -184,16 +204,20 @@ where
     }
 }
 
+// Tracks a single reader head
 struct SingleHead;
 
+// Tracks multiple reader heads
 struct MultipleHead {
-    head: Arc<AtomicUsize>,
-    heads: Arc<Mutex<Vec<Arc<AtomicUsize>>>>,
+    head: Arc<AtomicUsize>,                   // This reader's head
+    heads: Arc<Mutex<Vec<Arc<AtomicUsize>>>>, // All readers' heads
 }
 
 trait Head {
+    // Get this reader's head index
     fn get_head<T, W>(&self, state: &State<T, W>) -> usize;
 
+    // Advance this reader's head
     fn advance<T, W>(&self, count: usize, state: &State<T, W>);
 }
 
@@ -236,14 +260,15 @@ impl Head for MultipleHead {
     }
 }
 
+// Implementation of a stream sink
 struct SourceImpl<T, W, H>
 where
     W: WakeAll,
 {
     state: Arc<State<T, W>>,
-    waker: Arc<AtomicWaker>,
-    requested: Option<usize>,
-    head: H,
+    waker: Arc<AtomicWaker>,  // this reader's waker
+    requested: Option<usize>, // the current requested number of elements
+    head: H,                  // the reader(s)'s head(s)
 }
 
 impl<T, W, H> Drop for SourceImpl<T, W, H>
@@ -259,6 +284,7 @@ where
     }
 }
 
+// Readers can only be cloned if the stream supports multiple readers
 impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
     fn clone(&self) -> Self {
         // Copy the head value for the new source
@@ -275,6 +301,7 @@ impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
             .lock()
             .expect("another thread panicked!");
 
+        // Insert the head and waker for this reader
         heads.push(head.clone());
         wakers.push(waker.clone());
 
@@ -295,11 +322,12 @@ where
     H: Head + Unpin,
     W: WakeAll,
 {
-    fn poll_request(
+    // requests a pointer
+    fn poll_request_ptr(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
-    ) -> Poll<Result<Status<&[T]>, Error>> {
+    ) -> Poll<Result<(*mut T, usize), Error>> {
         if count <= (self.state.size - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
@@ -325,8 +353,18 @@ where
 
         self.requested.replace(count);
 
+        Poll::Ready(Ok((self.state.offset_ptr(head) as _, available)))
+    }
+
+    // all readers support immutable requests
+    fn poll_request_impl(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<Status<&[T]>, Error>> {
+        let (ptr, available) = ready!(self.poll_request_ptr(cx, count))?;
+
         let slice = if available > 0 {
-            let ptr = self.state.offset_ptr(head);
             unsafe { std::slice::from_raw_parts(ptr, available) }
         } else {
             &[]
@@ -340,7 +378,7 @@ where
         }))
     }
 
-    fn poll_consume(
+    fn poll_consume_impl(
         self: Pin<&mut Self>,
         _: &mut Context,
         count: usize,
@@ -363,73 +401,41 @@ where
     }
 }
 
-/*
-pub(crate) fn spmc_buffer<T: Send + Sync + Default + 'static>(
-    min_size: usize,
-) -> (SinkImpl<T>, SourceImpl<T>) {
-    assert!(min_size > 0, "`min_size` must be greater than 0");
-    let state = Arc::new(State::new(min_size));
+// If there is a single reader, it can obtain mutable access
+impl<T> SourceImpl<T, SingleWaker, SingleHead> {
+    fn poll_request_mut_impl(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<Status<&mut [T]>, Error>> {
+        let (ptr, available) = ready!(self.poll_request_ptr(cx, count))?;
 
-    let (sink_sender, source_receiver) = channel(1);
-    let (source_sender, sink_receiver) = channel(1);
+        let slice = if available > 0 {
+            unsafe { std::slice::from_raw_parts_mut(ptr, available) }
+        } else {
+            &mut []
+        };
 
-    let senders = Arc::new(Mutex::new(vec![sink_sender]));
-    let head = Arc::new(AtomicUsize::new(0));
-    let heads = Arc::new(Mutex::new(vec![head.clone()]));
-
-    (
-        SinkImpl {
-            state: state.clone(),
-            trigger_receiver: sink_receiver,
-            trigger_sender: MultiSender::Multiple(senders.clone()),
-        },
-        SourceImpl {
-            state,
-            trigger_receiver: source_receiver,
-            trigger_sender: source_sender,
-            multi_source: Some(MultiSource {
-                head,
-                heads,
-                senders: Arc::downgrade(&senders),
-            }),
-        },
-    )
+        // Return the slice
+        Poll::Ready(Ok(if slice.len() < count {
+            Status::Incomplete(slice)
+        } else {
+            Status::Ready(slice)
+        }))
+    }
 }
 
-pub(crate) fn spsc_buffer<T: Send + Sync + Default + 'static>(
-    min_size: usize,
-) -> (SinkImpl<T>, SourceImpl<T>) {
-    assert!(min_size > 0, "`min_size` must be greater than 0");
-    let state = Arc::new(State::new(min_size));
-
-    let (sink_sender, source_receiver) = channel(1);
-    let (source_sender, sink_receiver) = channel(1);
-
-    (
-        SinkImpl {
-            state: state.clone(),
-            trigger_receiver: sink_receiver,
-            trigger_sender: MultiSender::Single(Box::new(sink_sender)),
-        },
-        SourceImpl {
-            state,
-            trigger_receiver: source_receiver,
-            trigger_sender: source_sender,
-            multi_source: None,
-        },
-    )
-}
-*/
-
+/// A single-producer, multiple-consumer async circular buffer.
 pub mod spmc {
     use super::*;
 
-    /// Creates a single-producer, multiple-consumer async buffer.
+    /// Creates a single-producer, multiple-consumer async circular buffer.
     ///
     /// The buffer can store at least `min_size` elements, but might hold more.
+    ///
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn buffer<T: Send + Sync + Default + 'static>(
+    pub fn circular_buffer<T: Send + Sync + Default + 'static>(
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
@@ -459,26 +465,73 @@ pub mod spmc {
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
-    pub struct BufferSink<T: Send + Sync + 'static>(SinkImpl<T, MultipleWaker>);
+    #[pin_project]
+    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, MultipleWaker>);
 
     /// Read values from the associated `BufferSink`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
+    #[pin_project]
     #[derive(Clone)]
-    pub struct BufferSource<T>(SourceImpl<T, MultipleWaker, MultipleHead>);
+    pub struct BufferSource<T>(#[pin] SourceImpl<T, MultipleWaker, MultipleHead>);
+
+    impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
+        type Item = T;
+
+        fn poll_reserve(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<&mut [Self::Item], Error>> {
+            let pinned = self.project();
+            pinned.0.poll_reserve_impl(cx, count)
+        }
+
+        fn poll_commit(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_commit_impl(cx, count)
+        }
+    }
+
+    impl<T> Source for BufferSource<T> {
+        type Item = T;
+
+        fn poll_request(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<Status<&[Self::Item]>, Error>> {
+            let pinned = self.project();
+            pinned.0.poll_request_impl(cx, count)
+        }
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_consume_impl(cx, count)
+        }
+    }
 }
 
+/// A single-producer, single-consumer async circular buffer.
 pub mod spsc {
     use super::*;
 
-    /// Creates a single-producer, single-consumer async buffer.
+    /// Creates a single-producer, single-consumer async circular buffer.
     ///
     /// The buffer can store at least `min_size` elements, but might hold more.
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn buffer<T: Send + Sync + Default + 'static>(
+    pub fn circular_buffer<T: Send + Sync + Default + 'static>(
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
@@ -499,17 +552,74 @@ pub mod spsc {
         )
     }
 
-    /// Write values to the associated `BufferSource`s.
+    /// Write values to the associated `BufferSource`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
-    pub struct BufferSink<T: Send + Sync + 'static>(SinkImpl<T, SingleWaker>);
+    #[pin_project]
+    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, SingleWaker>);
 
     /// Read values from the associated `BufferSink`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
-    pub struct BufferSource<T>(SourceImpl<T, SingleWaker, SingleHead>);
+    #[pin_project]
+    pub struct BufferSource<T>(#[pin] SourceImpl<T, SingleWaker, SingleHead>);
+
+    impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
+        type Item = T;
+
+        fn poll_reserve(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<&mut [Self::Item], Error>> {
+            let pinned = self.project();
+            pinned.0.poll_reserve_impl(cx, count)
+        }
+
+        fn poll_commit(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_commit_impl(cx, count)
+        }
+    }
+
+    impl<T> Source for BufferSource<T> {
+        type Item = T;
+
+        fn poll_request(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<Status<&[Self::Item]>, Error>> {
+            let pinned = self.project();
+            pinned.0.poll_request_impl(cx, count)
+        }
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_consume_impl(cx, count)
+        }
+    }
+
+    impl<T> SourceMut for BufferSource<T> {
+        fn poll_request_mut(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<Status<&mut [Self::Item]>, Error>> {
+            let pinned = self.project();
+            pinned.0.poll_request_mut_impl(cx, count)
+        }
+    }
 }
