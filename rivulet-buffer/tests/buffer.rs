@@ -28,17 +28,24 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(
 async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
-    loop {
+    let mut closed = false;
+    while !closed {
         let count = rng.gen_range(1, BUFFER_SIZE);
-        let res = source.request(count).await;
+        match source.request(count).await {
+            Err(Error::Closed) => {
+                closed = true;
+                assert!(source.source().len() <= count);
+            }
+            x => {
+                x.unwrap();
+                assert_eq!(source.source().len(), count);
+            }
+        }
         for value in source.source() {
             hasher.write_i64(*value);
         }
-        if let Err(Error::Closed) = res {
-            break;
-        } else {
-            res.unwrap()
-        }
+        let consumed = source.source().len();
+        source.consume(consumed).await.unwrap();
     }
     sender.send(hasher.finish()).unwrap();
 }

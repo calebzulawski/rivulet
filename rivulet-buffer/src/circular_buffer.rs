@@ -333,7 +333,7 @@ where
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if count <= (self.state.size - 1) {
+        if count > (self.state.size - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
 

@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 pub enum Error {
     Closed,
     Overflow,
-    Other(Box<dyn std::error::Error>),
+    Other(Box<dyn std::error::Error + Send>),
 }
 
 impl std::fmt::Display for Error {
