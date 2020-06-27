@@ -20,8 +20,8 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(
             *value = rng.gen();
             hasher.write_i64(*value);
         }
+        sink.commit(block).await.unwrap();
     }
-    sink.commit(block).await.unwrap();
     sender.send(hasher.finish()).unwrap();
 }
 
@@ -77,7 +77,7 @@ async fn spmc_buffer_integrity() {
         tokio::spawn(read(source.clone(), send));
         read_recv.push(recv);
     }
-    std::mem::drop(source);
+    std::mem::drop(source); // remaining reference doesn't get used, so drop it
 
     let (write_hash, read_hashes) =
         futures::future::join(write_recv, futures::future::join_all(read_recv)).await;

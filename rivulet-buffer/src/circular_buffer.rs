@@ -6,7 +6,7 @@ use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc, Mutex,
+    Arc, Mutex, RwLock,
 };
 use std::task::{Context, Poll};
 
@@ -56,7 +56,7 @@ impl<T, W> State<T, W> {
 
     // return the pointer to the tail
     fn tail_ptr(&self) -> *mut T {
-        unsafe { self.buffer.ptr().add(self.tail.load(Ordering::Relaxed)) }
+        unsafe { self.buffer.ptr().add(self.tail.load(Ordering::Acquire)) }
     }
 
     // advance a buffer index by an amount (such as a head or tail)
@@ -159,11 +159,6 @@ where
             return Poll::Ready(Err(Error::Overflow));
         }
 
-        // Check if closed, optimistically
-        if self.state.closed.load(Ordering::Relaxed) {
-            return Poll::Ready(Err(Error::Closed));
-        }
-
         // Wait until enough room to write
         if self.state.writable_len() < count {
             self.state.write_waker.register(cx.waker());
@@ -176,14 +171,14 @@ where
             };
         }
 
-        // Update how much is reserved
+        // Update the reserved amount
         self.reserved = UnboundSlice(self.state.tail_ptr(), count);
 
         Poll::Ready(Ok(()))
     }
 
     fn poll_commit_impl(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
@@ -198,6 +193,7 @@ where
 
         // Advance the buffer
         self.state.advance_value(count, &self.state.tail);
+        self.reserved = UnboundSlice(self.state.tail_ptr(), self.reserved.1 - count);
 
         // Notify source(s) that data is available
         self.state.read_waker.wake();
@@ -211,13 +207,16 @@ struct SingleHead;
 
 // Tracks multiple reader heads
 struct MultipleHead {
-    head: Arc<AtomicUsize>,                   // This reader's head
-    heads: Arc<Mutex<Vec<Arc<AtomicUsize>>>>, // All readers' heads
+    head: Arc<AtomicUsize>,                    // This reader's head
+    heads: Arc<RwLock<Vec<Arc<AtomicUsize>>>>, // All readers' heads
 }
 
 trait Head {
     // Get this reader's head index
     fn get_head<T, W>(&self, state: &State<T, W>) -> usize;
+
+    // Perform on drop
+    fn drop<T, W>(&self, _: &State<T, W>) {}
 
     // Advance this reader's head
     fn advance<T, W>(&self, count: usize, state: &State<T, W>);
@@ -228,22 +227,17 @@ impl Head for SingleHead {
         state.head.load(Ordering::Acquire)
     }
 
+    fn drop<T, W>(&self, _: &State<T, W>) {}
+
     fn advance<T, W>(&self, count: usize, state: &State<T, W>) {
         state.advance_value(count, &state.head);
     }
 }
 
-impl Head for MultipleHead {
-    fn get_head<T, W>(&self, _: &State<T, W>) -> usize {
-        self.head.load(Ordering::Acquire)
-    }
-
-    fn advance<T, W>(&self, count: usize, state: &State<T, W>) {
-        // Advance just this head
-        state.advance_value(count, &self.head);
-
+impl MultipleHead {
+    fn update_global_head<T, W>(&self, state: &State<T, W>) {
         // Find the earliest head in the list
-        let heads = self.heads.lock().unwrap();
+        let heads = self.heads.read().unwrap();
         assert!(!heads.is_empty());
         let current_head = state.head.load(Ordering::Acquire);
         let mut earliest_head = std::usize::MAX;
@@ -262,10 +256,36 @@ impl Head for MultipleHead {
     }
 }
 
+impl Head for MultipleHead {
+    fn get_head<T, W>(&self, _: &State<T, W>) -> usize {
+        self.head.load(Ordering::Acquire)
+    }
+
+    fn drop<T, W>(&self, state: &State<T, W>) {
+        // Remove this reader's head
+        {
+            let mut heads = self.heads.write().expect("another thread panicked!");
+            heads.retain(|x| !Arc::ptr_eq(x, &self.head));
+        }
+
+        // Try to advance the global head
+        self.update_global_head(state);
+    }
+
+    fn advance<T, W>(&self, count: usize, state: &State<T, W>) {
+        // Advance just this head
+        state.advance_value(count, &self.head);
+
+        // Update the global head
+        self.update_global_head(state);
+    }
+}
+
 // Implementation of a stream sink
 struct SourceImpl<T, W, H>
 where
     W: WakeAll,
+    H: Head,
 {
     state: Arc<State<T, W>>,
     waker: Arc<AtomicWaker>,    // this reader's waker
@@ -276,13 +296,17 @@ where
 impl<T, W, H> Drop for SourceImpl<T, W, H>
 where
     W: WakeAll,
+    H: Head,
 {
     fn drop(&mut self) {
         // Release this source's waker, and close the buffer if all readers have dropped
         if self.state.read_waker.drop(&self.waker) {
             self.state.closed.store(true, Ordering::Relaxed);
-            self.state.write_waker.wake();
         }
+
+        // Removing a reader may free up room to write, so wake the writer
+        self.head.drop(&self.state);
+        self.state.write_waker.wake();
     }
 }
 
@@ -295,7 +319,7 @@ impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
         // Create a new waker
         let waker = Arc::new(AtomicWaker::new());
 
-        let mut heads = self.head.heads.lock().expect("another thread panicked!");
+        let mut heads = self.head.heads.write().expect("another thread panicked!");
         let mut wakers = self
             .state
             .read_waker
@@ -340,21 +364,29 @@ where
         let head = self.head.get_head(&self.state);
 
         // Wait for enough data to read
+        // Stream status must be checked first, ensuring that `available` is the complete remainder
+        let closed = self.state.closed.load(Ordering::Relaxed);
         let available = self
             .state
-            .distance(head, self.state.tail.load(Ordering::Relaxed));
-        if available < count {
+            .distance(head, self.state.tail.load(Ordering::Acquire));
+
+        // Determine if we actually close the stream
+        let requested = if available < count {
             self.waker.register(cx.waker());
 
             // Check if the sink disconnected after registering so we don't miss the notification.
             // Even if the connection is closed, we only want to error if there isn't enough data available.
-            if !self.state.closed.load(Ordering::Relaxed) {
+            if closed {
+                available
+            } else {
                 return Poll::Pending;
             }
-        }
+        } else {
+            count
+        };
 
         // Update how much is requested
-        self.requested = UnboundSlice(self.state.offset_ptr(head) as _, available);
+        self.requested = UnboundSlice(self.state.offset_ptr(head) as _, requested);
 
         Poll::Ready(if available < count {
             Err(Error::Closed)
@@ -364,7 +396,7 @@ where
     }
 
     fn poll_consume_impl(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         _: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
@@ -374,8 +406,12 @@ where
 
         // Advance the head
         self.head.advance(count, &self.state);
+        self.requested = UnboundSlice(
+            self.state.offset_ptr(self.head.get_head(&self.state)) as _,
+            self.requested.1 - count,
+        );
 
-        // Notify the reader
+        // Notify the writer
         self.state.write_waker.wake();
 
         Poll::Ready(Ok(()))
@@ -408,7 +444,7 @@ pub mod spmc {
         let state = Arc::new(State::new(min_size, MultipleWaker(wakers)));
 
         let head = Arc::new(AtomicUsize::new(0));
-        let heads = Arc::new(Mutex::new(vec![head.clone()]));
+        let heads = Arc::new(RwLock::new(vec![head.clone()]));
 
         (
             BufferSink(SinkImpl {
