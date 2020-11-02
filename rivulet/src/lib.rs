@@ -5,6 +5,4 @@ pub mod buffer {
     pub use rivulet_buffer::*;
 }
 
-//pub use rivulet_core::transform;
-
-pub use rivulet_core::stream::{Sink, Source};
+pub use rivulet_core::*;

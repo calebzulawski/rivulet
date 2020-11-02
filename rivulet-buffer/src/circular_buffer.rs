@@ -1,44 +1,32 @@
+use crate::unsafe_circular_buffer::UnsafeCircularBuffer;
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
 use rivulet_core::stream::{Error, Sink, Source, SourceMut};
-use slice_deque::Buffer;
-use std::mem::MaybeUninit;
-use std::pin::Pin;
-use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc, Mutex, RwLock,
+use std::{
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex, RwLock,
+    },
+    task::{Context, Poll},
 };
-use std::task::{Context, Poll};
 
 // Shared state
 struct State<T, W> {
-    buffer: Buffer<T>,
-    size: usize,              // number of elements in the buffer
-    head: AtomicUsize,        // index of the first written element
-    tail: AtomicUsize,        // index one past the end of the written data
+    buffer: UnsafeCircularBuffer<T>,
+    head: AtomicUsize,
+    tail: AtomicUsize,
     closed: AtomicBool,       // true if the stream is closed
     write_waker: AtomicWaker, // waker stored by the writer when waiting
     read_waker: W,            // waker(s) stored by the reader(s) when waiting
 }
 
 impl<T: Default, W> State<T, W> {
-    fn new(min_size: usize, read_waker: W) -> Self {
-        // Initialize the buffer memory
+    fn new(minimum_size: usize, read_waker: W) -> Self {
         // The +1 ensures there's room for a marker element (to indicate the difference between
         // empty and full
-        let buffer = Buffer::<T>::uninitialized(2 * (min_size + 1)).unwrap();
-        unsafe {
-            for v in std::slice::from_raw_parts_mut(
-                buffer.ptr() as *mut MaybeUninit<T>,
-                buffer.len() / 2,
-            ) {
-                v.as_mut_ptr().write(T::default());
-            }
-        }
-
         Self {
-            size: buffer.len() / 2,
-            buffer,
+            buffer: UnsafeCircularBuffer::new(minimum_size + 1),
             head: AtomicUsize::new(0),
             tail: AtomicUsize::new(0),
             closed: AtomicBool::new(false),
@@ -49,25 +37,16 @@ impl<T: Default, W> State<T, W> {
 }
 
 impl<T, W> State<T, W> {
-    // compute an offset into the buffer (absolute index)
-    fn offset_ptr(&self, offset: usize) -> *const T {
-        unsafe { self.buffer.ptr().add(offset % self.size) }
-    }
-
-    // return the pointer to the tail
-    fn tail_ptr(&self) -> *mut T {
-        unsafe { self.buffer.ptr().add(self.tail.load(Ordering::Acquire)) }
-    }
-
     // advance a buffer index by an amount (such as a head or tail)
-    fn advance_value(&self, advance: usize, value: &AtomicUsize) {
-        let new_value = (value.load(Ordering::Acquire) + advance) % self.size;
+    fn advance_value(&self, advance: usize, value: &AtomicUsize) -> usize {
+        let new_value = (value.load(Ordering::Acquire) + advance) % self.buffer.len();
         value.store(new_value, Ordering::Release);
+        new_value
     }
 
     // compute the distance between two buffer indices
     fn distance(&self, first: usize, second: usize) -> usize {
-        (second + self.size - first) % self.size
+        (second + self.buffer.len() - first) % self.buffer.len()
     }
 
     // return the number of writable elements
@@ -75,7 +54,7 @@ impl<T, W> State<T, W> {
     fn writable_len(&self) -> usize {
         self.distance(
             self.tail.load(Ordering::Acquire),
-            self.head.load(Ordering::Acquire) + self.size - 1,
+            self.head.load(Ordering::Acquire) + self.buffer.len() - 1,
         )
     }
 }
@@ -119,17 +98,13 @@ impl WakeAll for MultipleWaker {
     }
 }
 
-struct UnboundSlice<T>(*mut T, usize);
-
-unsafe impl<T: Send> Send for UnboundSlice<T> {}
-
 // Implementation of a stream sink
 struct SinkImpl<T, W>
 where
     W: WakeAll,
 {
     state: Arc<State<T, W>>,
-    reserved: UnboundSlice<T>, // current reservation
+    reserved: (usize, usize),
 }
 
 impl<T, W> Drop for SinkImpl<T, W>
@@ -147,7 +122,11 @@ where
     W: WakeAll,
 {
     fn sink_impl(&mut self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.reserved.0, self.reserved.1) }
+        unsafe {
+            self.state
+                .buffer
+                .range_mut(self.reserved.0, self.reserved.1)
+        }
     }
 
     fn poll_reserve_impl(
@@ -155,7 +134,7 @@ where
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if count > (self.state.size - 1) {
+        if count > (self.state.buffer.len() - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
 
@@ -172,7 +151,7 @@ where
         }
 
         // Update the reserved amount
-        self.reserved = UnboundSlice(self.state.tail_ptr(), count);
+        self.reserved = (self.state.tail.load(Ordering::Acquire), count);
 
         Poll::Ready(Ok(()))
     }
@@ -192,13 +171,15 @@ where
         }
 
         // Advance the buffer
-        self.state.advance_value(count, &self.state.tail);
-        self.reserved = UnboundSlice(self.state.tail_ptr(), self.reserved.1 - count);
+        self.reserved = (
+            self.state.advance_value(count, &self.state.tail),
+            self.reserved.1 - count,
+        );
 
         // Notify source(s) that data is available
         self.state.read_waker.wake();
 
-        return Poll::Ready(Ok(()));
+        Poll::Ready(Ok(()))
     }
 }
 
@@ -288,9 +269,9 @@ where
     H: Head,
 {
     state: Arc<State<T, W>>,
-    waker: Arc<AtomicWaker>,    // this reader's waker
-    requested: UnboundSlice<T>, // the current request
-    head: H,                    // the reader(s)'s head(s)
+    waker: Arc<AtomicWaker>,   // this reader's waker
+    requested: (usize, usize), // the current request (offset, size)
+    head: H,                   // the reader(s)'s head(s)
 }
 
 impl<T, W, H> Drop for SourceImpl<T, W, H>
@@ -334,7 +315,7 @@ impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
         Self {
             state: self.state.clone(),
             waker,
-            requested: UnboundSlice(std::ptr::null_mut(), 0),
+            requested: (0, 0),
             head: MultipleHead {
                 head,
                 heads: self.head.heads.clone(),
@@ -349,7 +330,7 @@ where
     W: WakeAll,
 {
     fn source_impl(&self) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.requested.0, self.requested.1) }
+        unsafe { self.state.buffer.range(self.requested.0, self.requested.1) }
     }
 
     fn poll_request_impl(
@@ -357,7 +338,7 @@ where
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if count > (self.state.size - 1) {
+        if count > (self.state.buffer.len() - 1) {
             return Poll::Ready(Err(Error::Overflow));
         }
 
@@ -386,7 +367,7 @@ where
         };
 
         // Update how much is requested
-        self.requested = UnboundSlice(self.state.offset_ptr(head) as _, requested);
+        self.requested = (head % self.state.buffer.len(), requested);
 
         Poll::Ready(if available < count {
             Err(Error::Closed)
@@ -406,8 +387,8 @@ where
 
         // Advance the head
         self.head.advance(count, &self.state);
-        self.requested = UnboundSlice(
-            self.state.offset_ptr(self.head.get_head(&self.state)) as _,
+        self.requested = (
+            self.head.get_head(&self.state) % self.state.buffer.len(),
             self.requested.1 - count,
         );
 
@@ -421,7 +402,11 @@ where
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, SingleWaker, SingleHead> {
     fn source_mut_impl(&self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.requested.0, self.requested.1) }
+        unsafe {
+            self.state
+                .buffer
+                .range_mut(self.requested.0, self.requested.1)
+        }
     }
 }
 
@@ -449,12 +434,12 @@ pub mod spmc {
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: UnboundSlice(std::ptr::null_mut(), 0),
+                reserved: (0, 0),
             }),
             BufferSource(SourceImpl {
                 state,
                 waker,
-                requested: UnboundSlice(std::ptr::null_mut(), 0),
+                requested: (0, 0),
                 head: MultipleHead { head, heads },
             }),
         )
@@ -549,12 +534,12 @@ pub mod spsc {
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: UnboundSlice(std::ptr::null_mut(), 0),
+                reserved: (0, 0),
             }),
             BufferSource(SourceImpl {
                 state,
                 waker,
-                requested: UnboundSlice(std::ptr::null_mut(), 0),
+                requested: (0, 0),
                 head: SingleHead,
             }),
         )
