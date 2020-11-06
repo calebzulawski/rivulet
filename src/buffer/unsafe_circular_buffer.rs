@@ -12,7 +12,7 @@ unsafe impl<T> Sync for UnsafeCircularBuffer<T> where T: Send {}
 impl<T> Drop for UnsafeCircularBuffer<T> {
     fn drop(&mut self) {
         unsafe {
-            crate::vm::deallocate_mirrored(self.ptr as *mut u8, self.size * size_of::<T>())
+            crate::buffer::vm::deallocate_mirrored(self.ptr as *mut u8, self.size * size_of::<T>())
                 .unwrap();
         }
     }
@@ -23,7 +23,7 @@ impl<T: Default> UnsafeCircularBuffer<T> {
         // Determine the smallest buffer larger than minimum_size that is both a multiple of the
         // allocation size and the type size.
         let size_bytes = {
-            let granularity = lcm(crate::vm::allocation_size(), size_of::<T>());
+            let granularity = lcm(crate::buffer::vm::allocation_size(), size_of::<T>());
             div_ceil(minimum_size * size_of::<T>(), granularity)
                 .checked_mul(granularity)
                 .unwrap()
@@ -32,7 +32,7 @@ impl<T: Default> UnsafeCircularBuffer<T> {
 
         // Initialize the buffer memory
         let ptr = unsafe {
-            let ptr = crate::vm::allocate_mirrored(size_bytes).unwrap() as *mut T;
+            let ptr = crate::buffer::vm::allocate_mirrored(size_bytes).unwrap() as *mut T;
             for v in std::slice::from_raw_parts_mut(ptr as *mut MaybeUninit<T>, size) {
                 v.as_mut_ptr().write(T::default());
             }

@@ -25,7 +25,7 @@ pub fn allocation_size() -> usize {
 ///
 /// # Panics
 /// Panics if `size` is not a multiple of [`allocation_size`](fn.allocation_size.html).
-pub fn allocate_mirrored(size: usize) -> Result<*mut u8, crate::error::SystemError> {
+pub fn allocate_mirrored(size: usize) -> Result<*mut u8, crate::buffer::error::SystemError> {
     implementation::allocate_mirrored(size)
 }
 
@@ -37,7 +37,7 @@ pub fn allocate_mirrored(size: usize) -> Result<*mut u8, crate::error::SystemErr
 pub unsafe fn deallocate_mirrored(
     address: *mut u8,
     size: usize,
-) -> Result<(), crate::error::SystemError> {
+) -> Result<(), crate::buffer::error::SystemError> {
     implementation::deallocate_mirrored(address, size)
 }
 

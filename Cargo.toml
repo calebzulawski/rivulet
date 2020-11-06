@@ -1,6 +1,34 @@
-[workspace]
-members = [
-    "rivulet",
-    "rivulet-core",
-    "rivulet-buffer",
-]
+[package]
+name = "rivulet"
+version = "0.1.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Asynchronous contiguous-memory streams"
+repository = "https://github.com/calebzulawski/rivulet"
+categories = ["asynchronous", "memory-management"]
+readme = "README.md"
+edition = "2018"
+
+[features]
+default = ["buffer"]
+buffer = ["futures", "num-integer", "once_cell", "libc", "nix", "winapi"]
+
+[dependencies]
+pin-project = "1"
+futures = { version = "0.3", optional = true }
+num-integer = { version = "0.1", optional = true }
+once_cell = { version = "1", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", optional = true }
+nix = { version = "0.19", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# Must use the std feature, otherwise c_void has incorrect repr and pointer arithmetic doesn't work
+# https://github.com/retep998/winapi-rs/issues/950
+winapi = { version = "0.3", optional = true, features = ["std", "winbase", "winnt", "handleapi", "sysinfoapi", "errhandlingapi", "memoryapi"] }
+
+[dev-dependencies]
+seahash = "3"
+rand = { version = "0.7", features = ["small_rng"] }
+tokio = { version = "0.2", default-features = false, features = ["sync", "rt-threaded", "macros"] }

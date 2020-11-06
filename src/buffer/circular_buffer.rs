@@ -1,7 +1,7 @@
-use crate::unsafe_circular_buffer::UnsafeCircularBuffer;
+use crate::buffer::unsafe_circular_buffer::UnsafeCircularBuffer;
+use crate::stream::{Error, Sink, Source, SourceMut};
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
-use rivulet_core::stream::{Error, Sink, Source, SourceMut};
 use std::{
     pin::Pin,
     sync::{

@@ -1,5 +1,5 @@
 mod shm_open_anonymous;
-use crate::error::SystemError;
+use crate::buffer::error::SystemError;
 use nix::{
     sys::mman::{mmap, munmap, MapFlags, ProtFlags},
     unistd::{ftruncate, sysconf, SysconfVar},
