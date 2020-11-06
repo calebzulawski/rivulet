@@ -1,6 +1,6 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet_buffer::circular_buffer::{spmc, spsc};
-use rivulet_core::stream::{Error, Sink, SinkExt, Source, SourceExt};
+use rivulet_core::stream::{Error, Sink, Source};
 use std::hash::Hasher;
 use tokio::sync::oneshot;
 

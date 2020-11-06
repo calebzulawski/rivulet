@@ -23,7 +23,7 @@ impl<T: Default> UnsafeCircularBuffer<T> {
         // Determine the smallest buffer larger than minimum_size that is both a multiple of the
         // allocation size and the type size.
         let size_bytes = {
-            let granularity = num_integer::lcm(crate::vm::allocation_size(), size_of::<T>());
+            let granularity = lcm(crate::vm::allocation_size(), size_of::<T>());
             div_ceil(minimum_size * size_of::<T>(), granularity)
                 .checked_mul(granularity)
                 .unwrap()
