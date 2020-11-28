@@ -38,7 +38,8 @@ jobs:
         - aarch64-linux-android
         os:
         - ubuntu-latest
-        cross_url: https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
+        cross_url:
+        - https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
         include:
         - target: aarch64-apple-ios
           os: macos-latest
