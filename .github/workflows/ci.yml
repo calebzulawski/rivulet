@@ -3,7 +3,7 @@ name: Build
 on: [push]
 
 jobs:
-  native-tier1:
+  test:
     strategy:
       matrix:
         version:
@@ -29,60 +29,6 @@ jobs:
     - name: Run tests
       shell: bash
       run: cargo test --verbose
-
-
-  cross-tier1:
-    strategy:
-      matrix:
-        target:
-        - aarch64-linux-android
-        os:
-        - ubuntu-latest
-        cross_url:
-        - https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
-        include:
-        - target: aarch64-apple-ios
-          os: macos-latest
-          cross_url: https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-apple-darwin.tar.gz
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - uses: actions/checkout@v1
-    - name: Install Cross
-      run: |
-        mkdir -p "$HOME/.bin"
-        curl -sfSL --retry-delay 10 --retry 5 ${{ matrix.cross_url }} | tar zxf - -C "$HOME/.bin"
-        echo "$HOME/.bin" >> $GITHUB_PATH
-    - name: Run tests
-      run: |
-        cross +nightly test --target ${{ matrix.target }}
-
-
-  cross-tier2:
-    strategy:
-      matrix:
-        target:
-        - x86_64-sun-solaris
-        - x86_64-unknown-dragonfly
-        - x86_64-unknown-netbsd
-        os:
-        - ubuntu-latest
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - uses: actions/checkout@v1
-    - name: Install Cross
-      run: |
-        CROSS_URL=https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
-        mkdir -p "$HOME/.bin"
-        curl -sfSL --retry-delay 10 --retry 5 "${CROSS_URL}" | tar zxf - -C "$HOME/.bin"
-        echo "$HOME/.bin" >> $GITHUB_PATH
-    - name: Run tests
-      run: |
-        cross +nightly build --target ${{ matrix.target }}
-
 
   lint:
     strategy:
