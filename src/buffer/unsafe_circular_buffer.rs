@@ -51,6 +51,8 @@ impl<T> UnsafeCircularBuffer<T> {
         std::slice::from_raw_parts(self.ptr.add(offset), size)
     }
 
+    // Only safe if you can guarantee no other references to the same range
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn range_mut(&self, offset: usize, size: usize) -> &mut [T] {
         debug_assert!(offset < self.len());
         debug_assert!(size <= self.len());

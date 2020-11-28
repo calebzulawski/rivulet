@@ -105,7 +105,7 @@ pub trait Sink {
         -> Poll<Result<(), Error>>;
 
     /// Create a future that reserves `count` elements in the writable buffer.
-    fn reserve<'a>(&'a mut self, count: usize) -> Reserve<'a, Self>
+    fn reserve(&mut self, count: usize) -> Reserve<'_, Self>
     where
         Self: Sized + Unpin,
     {
@@ -117,7 +117,7 @@ pub trait Sink {
 
     /// Create a future that commits the first `count` elements in the writable buffer to the
     /// stream.
-    fn commit<'a>(&'a mut self, count: usize) -> Commit<'a, Self>
+    fn commit(&mut self, count: usize) -> Commit<'_, Self>
     where
         Self: Sized + Unpin,
     {
@@ -181,7 +181,7 @@ pub trait Source {
     ) -> Poll<Result<(), Error>>;
 
     /// Create a future that reads `count` elements into the buffer.
-    fn request<'a>(&'a mut self, count: usize) -> Request<'a, Self>
+    fn request(&mut self, count: usize) -> Request<'_, Self>
     where
         Self: Sized + Unpin,
     {
@@ -192,7 +192,7 @@ pub trait Source {
     }
 
     /// Create a future that advances past the first `count` elements in the buffer.
-    fn consume<'a>(&'a mut self, count: usize) -> Consume<'a, Self>
+    fn consume(&mut self, count: usize) -> Consume<'_, Self>
     where
         Self: Sized + Unpin,
     {

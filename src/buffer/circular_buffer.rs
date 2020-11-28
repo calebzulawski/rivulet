@@ -401,7 +401,7 @@ where
 
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, SingleWaker, SingleHead> {
-    fn source_mut_impl(&self) -> &mut [T] {
+    fn source_mut_impl(&mut self) -> &mut [T] {
         unsafe {
             self.state
                 .buffer
