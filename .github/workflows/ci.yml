@@ -1,0 +1,117 @@
+name: Build
+
+on: [push]
+
+jobs:
+  native-tier1:
+    strategy:
+      matrix:
+        version:
+          - 1.45.0
+          - stable
+          - beta
+          - nightly
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.version }}
+        override: true
+        profile: minimal
+    - name: Run tests
+      shell: bash
+      run: cargo test --verbose
+
+
+  cross-tier1:
+    strategy:
+      matrix:
+        target:
+        - aarch64-linux-android
+        os:
+        - ubuntu-latest
+        include:
+        - target: aarch64-apple-ios
+          os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Cross
+      run: |
+        CROSS_URL=https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
+        mkdir -p "$HOME/.bin"
+        curl -sfSL --retry-delay 10 --retry 5 "${CROSS_URL}" | tar zxf - -C "$HOME/.bin"
+        echo "$HOME/.bin" >> $GITHUB_PATH
+    - name: Run tests
+      run: |
+        cross +nightly test --target ${{ matrix.target }}
+
+
+  cross-tier2:
+    strategy:
+      matrix:
+        target:
+        - x86_64-sun-solaris
+        - x86_64-unknown-dragonfly
+        - x86_64-unknown-netbsd
+        os:
+        - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Cross
+      run: |
+        CROSS_URL=https://github.com/rust-embedded/cross/releases/download/v0.2.1/cross-v0.2.1-x86_64-unknown-linux-gnu.tar.gz
+        mkdir -p "$HOME/.bin"
+        curl -sfSL --retry-delay 10 --retry 5 "${CROSS_URL}" | tar zxf - -C "$HOME/.bin"
+        echo "$HOME/.bin" >> $GITHUB_PATH
+    - name: Run tests
+      run: |
+        cross +nightly build --target ${{ matrix.target }}
+
+
+  lint:
+    strategy:
+      matrix:
+        version:
+          - nightly
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        profile: minimal
+        components: clippy, rustfmt
+    - name: Clippy lint
+      run: cargo clippy --all-targets -- -D warnings
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Install Deadlinks
+      run: |
+        DEADLINKS_URL=https://github.com/deadlinks/cargo-deadlinks/releases/download/0.6.2/cargo-deadlinks-linux
+        mkdir -p "$HOME/.bin"
+        curl -sfSL --retry-delay 10 --retry 5 "${CROSS_URL}" -o "$HOME/.bin/deadlinks"
+        echo "$HOME/.bin" >> $GITHUB_PATH
+    - name: Check Deadlinks
+      run: |
+        cargo doc
+        deadlinks -v --check-http
