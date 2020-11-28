@@ -57,7 +57,7 @@ jobs:
       run: |
         DEADLINKS_URL=https://github.com/deadlinks/cargo-deadlinks/releases/download/0.6.2/cargo-deadlinks-linux
         mkdir -p "$HOME/.bin"
-        curl -sfSL --retry-delay 10 --retry 5 "${CROSS_URL}" -o "$HOME/.bin/deadlinks"
+        curl -sfSL --retry-delay 10 --retry 5 "${DEADLINKS_URL}" -o "$HOME/.bin/deadlinks"
         echo "$HOME/.bin" >> $GITHUB_PATH
     - name: Check Deadlinks
       run: |
