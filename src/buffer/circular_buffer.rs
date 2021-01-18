@@ -6,126 +6,154 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc, Mutex, RwLock,
+        Arc, RwLock,
     },
     task::{Context, Poll},
 };
 
 // Shared state
-struct State<T, W> {
+struct State<T, R> {
     buffer: UnsafeCircularBuffer<T>,
-    head: AtomicUsize,
-    tail: AtomicUsize,
     closed: AtomicBool,       // true if the stream is closed
+    tail: AtomicUsize,        // maximum extent of written data
     write_waker: AtomicWaker, // waker stored by the writer when waiting
-    read_waker: W,            // waker(s) stored by the reader(s) when waiting
+    readers: R,               // state of each attached reader
 }
 
-impl<T: Default, W> State<T, W> {
-    fn new(minimum_size: usize, read_waker: W) -> Self {
+impl<T: Default, R> State<T, R> {
+    fn new(minimum_size: usize, readers: R) -> Self {
         // The +1 ensures there's room for a marker element (to indicate the difference between
         // empty and full
         Self {
             buffer: UnsafeCircularBuffer::new(minimum_size + 1),
-            head: AtomicUsize::new(0),
-            tail: AtomicUsize::new(0),
             closed: AtomicBool::new(false),
+            tail: AtomicUsize::new(0),
             write_waker: AtomicWaker::new(),
-            read_waker,
+            readers,
         }
     }
 }
 
-impl<T, W> State<T, W> {
-    // advance a buffer index by an amount (such as a head or tail)
-    fn advance_value(&self, advance: usize, value: &AtomicUsize) -> usize {
-        let new_value = (value.load(Ordering::Acquire) + advance) % self.buffer.len();
-        value.store(new_value, Ordering::Release);
-        new_value
-    }
-
-    // compute the distance between two buffer indices
-    fn distance(&self, first: usize, second: usize) -> usize {
-        (second + self.buffer.len() - first) % self.buffer.len()
-    }
-
-    // return the number of writable elements
-    // (leaving room for a single marker element, to allow distinguishing empty and full buffers)
-    fn writable_len(&self) -> usize {
-        self.distance(
-            self.tail.load(Ordering::Acquire),
-            self.head.load(Ordering::Acquire) + self.buffer.len() - 1,
-        )
-    }
+fn circular_add(a: usize, b: usize, len: usize) -> usize {
+    (a + b) % len
 }
 
-// Wakes a single reader
-struct SingleWaker(Arc<AtomicWaker>);
+fn circular_sub(a: usize, b: usize, len: usize) -> usize {
+    (b + len - a) % len
+}
 
-// Wakes multiple readers
-struct MultipleWaker(Mutex<Vec<Arc<AtomicWaker>>>);
+struct SingleReader {
+    waker: AtomicWaker,
+    head: AtomicUsize,
+}
 
-trait WakeAll {
-    // wake all waiting readers
+struct MultipleReaders {
+    readers: RwLock<Vec<Arc<SingleReader>>>,
+}
+
+trait Readers {
+    /// Wake all waiting readers
     fn wake(&self);
 
-    // drop a reader from the stream, returning true if no readers remain
-    fn drop(&self, waker: &Arc<AtomicWaker>) -> bool;
+    /// Load the earliest head of all readers
+    fn load_head(&self, tail: usize, len: usize, ordering: Ordering) -> usize;
+
+    /// Drop the provided reader from the list of readers, returning true if no readers remain
+    fn drop_reader(&self, reader: &Arc<SingleReader>) -> bool;
 }
 
-impl WakeAll for SingleWaker {
+impl Readers for Arc<SingleReader> {
     fn wake(&self) {
-        self.0.wake();
+        self.waker.wake();
     }
 
-    fn drop(&self, _: &Arc<AtomicWaker>) -> bool {
+    fn load_head(&self, _tail: usize, _len: usize, ordering: Ordering) -> usize {
+        self.head.load(ordering)
+    }
+
+    fn drop_reader(&self, _reader: &Arc<SingleReader>) -> bool {
         true
     }
 }
 
-impl WakeAll for MultipleWaker {
+impl Readers for MultipleReaders {
     fn wake(&self) {
-        let wakers = self.0.lock().expect("another thread panicked!");
-        for waker in wakers.iter() {
-            waker.wake();
+        let readers = self.readers.read().expect("another thread panicked!");
+        for reader in readers.iter() {
+            reader.waker.wake();
         }
     }
 
-    fn drop(&self, waker: &Arc<AtomicWaker>) -> bool {
-        let mut wakers = self.0.lock().expect("another thread panicked!");
-        wakers.retain(|x| !Arc::ptr_eq(x, waker));
-        wakers.is_empty()
+    fn load_head(&self, tail: usize, len: usize, ordering: Ordering) -> usize {
+        let readers = self.readers.read().expect("another thread panicked!");
+        let mut earliest_head = std::usize::MAX;
+        let mut largest_distance = 0;
+        for reader in readers.iter() {
+            let head = reader.head.load(ordering);
+            let distance = circular_sub(tail, head, len);
+            if distance >= largest_distance {
+                earliest_head = head;
+                largest_distance = distance;
+            }
+        }
+        assert!(earliest_head != std::usize::MAX);
+        earliest_head
+    }
+
+    fn drop_reader(&self, reader: &Arc<SingleReader>) -> bool {
+        let mut readers = self.readers.write().expect("another thread panicked!");
+        readers.retain(|test_reader| !Arc::ptr_eq(test_reader, reader));
+        readers.is_empty()
     }
 }
 
 // Implementation of a stream sink
-struct SinkImpl<T, W>
+struct SinkImpl<T, R>
 where
-    W: WakeAll,
+    R: Readers,
 {
-    state: Arc<State<T, W>>,
-    reserved: (usize, usize),
+    state: Arc<State<T, R>>,
+    tail: usize,
+    requested: usize,
+    available: usize,
 }
 
-impl<T, W> Drop for SinkImpl<T, W>
+impl<T, R> Drop for SinkImpl<T, R>
 where
-    W: WakeAll,
+    R: Readers,
 {
     fn drop(&mut self) {
         self.state.closed.store(true, Ordering::Relaxed);
-        self.state.read_waker.wake(); // waiting readers can exit without sufficient data
+        self.state.readers.wake(); // waiting readers can exit without sufficient data
     }
 }
 
-impl<T, W> SinkImpl<T, W>
+impl<T, R> SinkImpl<T, R>
 where
-    W: WakeAll,
+    R: Readers,
 {
     fn sink_impl(&mut self) -> &mut [T] {
-        unsafe {
+        unsafe { self.state.buffer.range_mut(self.tail, self.requested) }
+    }
+
+    fn max_len(&self) -> usize {
+        // leave room for a single marker element, to allow distinguishing empty and full buffers
+        self.state.buffer.len() - 1
+    }
+
+    fn data_available(&mut self, count: usize) -> bool {
+        let head =
             self.state
-                .buffer
-                .range_mut(self.reserved.0, self.reserved.1)
+                .readers
+                .load_head(self.tail, self.state.buffer.len(), Ordering::Relaxed);
+        let reserved = circular_sub(self.tail, head, self.state.buffer.len());
+        self.available = self.max_len() - reserved;
+        if self.available >= count {
+            self.requested = count;
+            true
+        } else {
+            self.requested = 0;
+            false
         }
     }
 
@@ -134,26 +162,30 @@ where
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if count > (self.state.buffer.len() - 1) {
+        if count > self.max_len() {
             return Poll::Ready(Err(Error::Overflow));
         }
 
-        // Wait until enough room to write
-        if self.state.writable_len() < count {
-            self.state.write_waker.register(cx.waker());
+        if self.available > count {
+            return Poll::Ready(Ok(()));
+        }
 
-            // Check if closed after registering, so we don't miss any notifications.
-            return if self.state.closed.load(Ordering::Relaxed) {
+        // Perform double-checking on the amount of available data
+        // The first check is efficient, but may spuriously fail.
+        // The second check occurs after the `acquire` produced by registering the waker.
+        if self.data_available(count) {
+            self.state.write_waker.register(cx.waker());
+            let closed = self.state.closed.load(Ordering::Relaxed);
+            if self.data_available(count) {
+                Poll::Ready(Ok(()))
+            } else if closed {
                 Poll::Ready(Err(Error::Closed))
             } else {
                 Poll::Pending
-            };
+            }
+        } else {
+            Poll::Ready(Ok(()))
         }
-
-        // Update the reserved amount
-        self.reserved = (self.state.tail.load(Ordering::Acquire), count);
-
-        Poll::Ready(Ok(()))
     }
 
     fn poll_commit_impl(
@@ -166,171 +198,87 @@ where
         }
 
         // Ensure that the commit is possible with the current reservation
-        if count > self.reserved.1 {
+        if count > self.available {
             return Poll::Ready(Err(Error::Overflow));
         }
 
         // Advance the buffer
-        self.reserved = (
-            self.state.advance_value(count, &self.state.tail),
-            self.reserved.1 - count,
-        );
-
-        // Notify source(s) that data is available
-        self.state.read_waker.wake();
+        self.tail = circular_add(self.tail, count, self.state.buffer.len());
+        self.available = self.available - count;
+        self.state.tail.store(self.tail, Ordering::Relaxed);
+        self.state.readers.wake();
 
         Poll::Ready(Ok(()))
     }
 }
 
-// Tracks a single reader head
-struct SingleHead;
-
-// Tracks multiple reader heads
-struct MultipleHead {
-    head: Arc<AtomicUsize>,                    // This reader's head
-    heads: Arc<RwLock<Vec<Arc<AtomicUsize>>>>, // All readers' heads
-}
-
-trait Head {
-    // Get this reader's head index
-    fn get_head<T, W>(&self, state: &State<T, W>) -> usize;
-
-    // Perform on drop
-    fn drop<T, W>(&self, _: &State<T, W>) {}
-
-    // Advance this reader's head
-    fn advance<T, W>(&self, count: usize, state: &State<T, W>);
-}
-
-impl Head for SingleHead {
-    fn get_head<T, W>(&self, state: &State<T, W>) -> usize {
-        state.head.load(Ordering::Acquire)
-    }
-
-    fn drop<T, W>(&self, _: &State<T, W>) {}
-
-    fn advance<T, W>(&self, count: usize, state: &State<T, W>) {
-        state.advance_value(count, &state.head);
-    }
-}
-
-impl MultipleHead {
-    fn update_global_head<T, W>(&self, state: &State<T, W>) {
-        // Find the earliest head in the list
-        let heads = self.heads.read().unwrap();
-        assert!(!heads.is_empty());
-        let current_head = state.head.load(Ordering::Acquire);
-        let mut earliest_head = std::usize::MAX;
-        let mut smallest_distance = std::usize::MAX;
-        for head in heads.iter() {
-            let this_head = head.load(Ordering::Acquire);
-            let this_distance = state.distance(current_head, this_head);
-            if this_distance < smallest_distance {
-                earliest_head = this_head;
-                smallest_distance = this_distance;
-            }
-        }
-
-        // Discard up to the earliest head
-        state.head.store(earliest_head, Ordering::Release);
-    }
-}
-
-impl Head for MultipleHead {
-    fn get_head<T, W>(&self, _: &State<T, W>) -> usize {
-        self.head.load(Ordering::Acquire)
-    }
-
-    fn drop<T, W>(&self, state: &State<T, W>) {
-        // Remove this reader's head
-        {
-            let mut heads = self.heads.write().expect("another thread panicked!");
-            heads.retain(|x| !Arc::ptr_eq(x, &self.head));
-        }
-
-        // Try to advance the global head
-        self.update_global_head(state);
-    }
-
-    fn advance<T, W>(&self, count: usize, state: &State<T, W>) {
-        // Advance just this head
-        state.advance_value(count, &self.head);
-
-        // Update the global head
-        self.update_global_head(state);
-    }
-}
-
 // Implementation of a stream sink
-struct SourceImpl<T, W, H>
+struct SourceImpl<T, R>
 where
-    W: WakeAll,
-    H: Head,
+    R: Readers,
 {
-    state: Arc<State<T, W>>,
-    waker: Arc<AtomicWaker>,   // this reader's waker
-    requested: (usize, usize), // the current request (offset, size)
-    head: H,                   // the reader(s)'s head(s)
+    state: Arc<State<T, R>>,
+    reader: Arc<SingleReader>,
+    head: usize,
+    requested: usize,
+    available: usize,
 }
 
-impl<T, W, H> Drop for SourceImpl<T, W, H>
+impl<T, R> Drop for SourceImpl<T, R>
 where
-    W: WakeAll,
-    H: Head,
+    R: Readers,
 {
     fn drop(&mut self) {
-        // Release this source's waker, and close the buffer if all readers have dropped
-        if self.state.read_waker.drop(&self.waker) {
+        if self.state.readers.drop_reader(&self.reader) {
             self.state.closed.store(true, Ordering::Relaxed);
         }
-
-        // Removing a reader may free up room to write, so wake the writer
-        self.head.drop(&self.state);
-        self.state.write_waker.wake();
+        self.state.write_waker.wake(); // writer might be able to advance or terminate
     }
 }
 
 // Readers can only be cloned if the stream supports multiple readers
-impl<T> Clone for SourceImpl<T, MultipleWaker, MultipleHead> {
+impl<T> Clone for SourceImpl<T, MultipleReaders> {
     fn clone(&self) -> Self {
-        // Copy the head value for the new source
-        let head = Arc::new(AtomicUsize::new(self.head.head.load(Ordering::Acquire)));
-
-        // Create a new waker
-        let waker = Arc::new(AtomicWaker::new());
-
-        let mut heads = self.head.heads.write().expect("another thread panicked!");
-        let mut wakers = self
+        let reader = Arc::new(SingleReader {
+            waker: AtomicWaker::new(),
+            head: AtomicUsize::new(self.head),
+        });
+        let mut readers = self
             .state
-            .read_waker
-            .0
-            .lock()
+            .readers
+            .readers
+            .write()
             .expect("another thread panicked!");
-
-        // Insert the head and waker for this reader
-        heads.push(head.clone());
-        wakers.push(waker.clone());
+        readers.push(reader.clone());
 
         Self {
             state: self.state.clone(),
-            waker,
-            requested: (0, 0),
-            head: MultipleHead {
-                head,
-                heads: self.head.heads.clone(),
-            },
+            reader,
+            head: self.head,
+            requested: self.requested,
+            available: self.available,
         }
     }
 }
 
-impl<T, W, H> SourceImpl<T, W, H>
+impl<T, R> SourceImpl<T, R>
 where
-    H: Head + Unpin,
-    W: WakeAll,
+    R: Readers,
 {
     fn source_impl(&self) -> &[T] {
-        unsafe { self.state.buffer.range(self.requested.0, self.requested.1) }
+        unsafe { self.state.buffer.range(self.head, self.requested) }
+    }
+
+    fn data_available(&mut self, count: usize) -> bool {
+        let tail = self.state.tail.load(Ordering::Relaxed);
+        self.available = circular_sub(tail, self.head, self.state.buffer.len());
+        if self.available >= count {
+            self.requested = count;
+            true
+        } else {
+            self.requested = 0;
+            false
+        }
     }
 
     fn poll_request_impl(
@@ -342,38 +290,25 @@ where
             return Poll::Ready(Err(Error::Overflow));
         }
 
-        let head = self.head.get_head(&self.state);
+        if self.available >= count {
+            return Poll::Ready(Ok(()));
+        }
 
-        // Wait for enough data to read
-        // Stream status must be checked first, ensuring that `available` is the complete remainder
-        let closed = self.state.closed.load(Ordering::Relaxed);
-        let available = self
-            .state
-            .distance(head, self.state.tail.load(Ordering::Acquire));
-
-        // Determine if we actually close the stream
-        let requested = if available < count {
-            self.waker.register(cx.waker());
-
-            // Check if the sink disconnected after registering so we don't miss the notification.
-            // Even if the connection is closed, we only want to error if there isn't enough data available.
-            if closed {
-                available
+        // Perform double-checking on the amount of available data
+        // The first check is efficient, but may spuriously fail.
+        // The second check occurs after the `acquire` produced by registering the waker.
+        if self.data_available(count) {
+            self.reader.waker.register(cx.waker());
+            if self.data_available(count) {
+                Poll::Ready(Ok(()))
+            } else if self.state.closed.load(Ordering::Relaxed) {
+                Poll::Ready(Err(Error::Closed))
             } else {
-                return Poll::Pending;
+                Poll::Pending
             }
         } else {
-            count
-        };
-
-        // Update how much is requested
-        self.requested = (head % self.state.buffer.len(), requested);
-
-        Poll::Ready(if available < count {
-            Err(Error::Closed)
-        } else {
-            Ok(())
-        })
+            Poll::Ready(Ok(()))
+        }
     }
 
     fn poll_consume_impl(
@@ -381,18 +316,14 @@ where
         _: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        if count > self.requested.1 {
+        if count > self.available {
             return Poll::Ready(Err(Error::Overflow));
         }
 
         // Advance the head
-        self.head.advance(count, &self.state);
-        self.requested = (
-            self.head.get_head(&self.state) % self.state.buffer.len(),
-            self.requested.1 - count,
-        );
-
-        // Notify the writer
+        self.head = circular_add(self.head, count, self.state.buffer.len());
+        self.available = self.available - count;
+        self.reader.head.store(self.head, Ordering::Relaxed);
         self.state.write_waker.wake();
 
         Poll::Ready(Ok(()))
@@ -400,13 +331,9 @@ where
 }
 
 // If there is a single reader, it can obtain mutable access
-impl<T> SourceImpl<T, SingleWaker, SingleHead> {
+impl<T> SourceImpl<T, Arc<SingleReader>> {
     fn source_mut_impl(&mut self) -> &mut [T] {
-        unsafe {
-            self.state
-                .buffer
-                .range_mut(self.requested.0, self.requested.1)
-        }
+        unsafe { self.state.buffer.range_mut(self.head, self.requested) }
     }
 }
 
@@ -424,23 +351,29 @@ pub mod spmc {
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
-        let waker = Arc::new(AtomicWaker::new());
-        let wakers = Mutex::new(vec![waker.clone()]);
-        let state = Arc::new(State::new(min_size, MultipleWaker(wakers)));
 
-        let head = Arc::new(AtomicUsize::new(0));
-        let heads = Arc::new(RwLock::new(vec![head.clone()]));
+        let reader = Arc::new(SingleReader {
+            head: AtomicUsize::new(0),
+            waker: AtomicWaker::new(),
+        });
+
+        let readers = RwLock::new(vec![reader.clone()]);
+
+        let state = Arc::new(State::new(min_size, MultipleReaders { readers }));
 
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: (0, 0),
+                tail: 0,
+                requested: 0,
+                available: 0,
             }),
             BufferSource(SourceImpl {
                 state,
-                waker,
-                requested: (0, 0),
-                head: MultipleHead { head, heads },
+                head: 0,
+                requested: 0,
+                available: 0,
+                reader,
             }),
         )
     }
@@ -451,7 +384,7 @@ pub mod spmc {
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, MultipleWaker>);
+    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, MultipleReaders>);
 
     /// Read values from the associated `BufferSink`.
     ///
@@ -460,7 +393,7 @@ pub mod spmc {
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
     #[derive(Clone)]
-    pub struct BufferSource<T>(#[pin] SourceImpl<T, MultipleWaker, MultipleHead>);
+    pub struct BufferSource<T>(#[pin] SourceImpl<T, MultipleReaders>);
 
     impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
         type Item = T;
@@ -528,19 +461,26 @@ pub mod spsc {
         min_size: usize,
     ) -> (BufferSink<T>, BufferSource<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
-        let waker = Arc::new(AtomicWaker::new());
-        let state = Arc::new(State::new(min_size, SingleWaker(waker.clone())));
+
+        let reader = Arc::new(SingleReader {
+            head: AtomicUsize::new(0),
+            waker: AtomicWaker::new(),
+        });
+        let state = Arc::new(State::new(min_size, reader.clone()));
 
         (
             BufferSink(SinkImpl {
                 state: state.clone(),
-                reserved: (0, 0),
+                tail: 0,
+                requested: 0,
+                available: 0,
             }),
             BufferSource(SourceImpl {
                 state,
-                waker,
-                requested: (0, 0),
-                head: SingleHead,
+                reader,
+                head: 0,
+                requested: 0,
+                available: 0,
             }),
         )
     }
@@ -551,7 +491,7 @@ pub mod spsc {
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, SingleWaker>);
+    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, Arc<SingleReader>>);
 
     /// Read values from the associated `BufferSink`.
     ///
@@ -559,7 +499,7 @@ pub mod spsc {
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSource<T>(#[pin] SourceImpl<T, SingleWaker, SingleHead>);
+    pub struct BufferSource<T>(#[pin] SourceImpl<T, Arc<SingleReader>>);
 
     impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
         type Item = T;
