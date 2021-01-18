@@ -18,7 +18,7 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
         sink.reserve(block).await.unwrap();
-        for value in sink.sink() {
+        for value in &mut sink.sink()[..block] {
             *value = rng.gen();
             hasher.write_i64(*value);
         }
@@ -40,7 +40,7 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: onesh
             }
             x => {
                 x.unwrap();
-                assert_eq!(source.source().len(), count);
+                assert!(source.source().len() >= count);
             }
         }
         for value in source.source() {

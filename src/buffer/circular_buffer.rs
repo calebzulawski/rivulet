@@ -39,7 +39,7 @@ fn circular_add(a: usize, b: usize, len: usize) -> usize {
 }
 
 fn circular_sub(a: usize, b: usize, len: usize) -> usize {
-    (b + len - a) % len
+    (a + len - b) % len
 }
 
 struct SingleReader {
@@ -114,7 +114,6 @@ where
 {
     state: Arc<State<T, R>>,
     tail: usize,
-    requested: usize,
     available: usize,
 }
 
@@ -133,7 +132,7 @@ where
     R: Readers,
 {
     fn sink_impl(&mut self) -> &mut [T] {
-        unsafe { self.state.buffer.range_mut(self.tail, self.requested) }
+        unsafe { self.state.buffer.range_mut(self.tail, self.available) }
     }
 
     fn max_len(&self) -> usize {
@@ -148,13 +147,7 @@ where
                 .load_head(self.tail, self.state.buffer.len(), Ordering::Relaxed);
         let reserved = circular_sub(self.tail, head, self.state.buffer.len());
         self.available = self.max_len() - reserved;
-        if self.available >= count {
-            self.requested = count;
-            true
-        } else {
-            self.requested = 0;
-            false
-        }
+        self.available >= count
     }
 
     fn poll_reserve_impl(
@@ -166,7 +159,7 @@ where
             return Poll::Ready(Err(Error::Overflow));
         }
 
-        if self.available > count {
+        if self.available >= count {
             return Poll::Ready(Ok(()));
         }
 
@@ -174,6 +167,8 @@ where
         // The first check is efficient, but may spuriously fail.
         // The second check occurs after the `acquire` produced by registering the waker.
         if self.data_available(count) {
+            Poll::Ready(Ok(()))
+        } else {
             self.state.write_waker.register(cx.waker());
             let closed = self.state.closed.load(Ordering::Relaxed);
             if self.data_available(count) {
@@ -183,8 +178,6 @@ where
             } else {
                 Poll::Pending
             }
-        } else {
-            Poll::Ready(Ok(()))
         }
     }
 
@@ -204,7 +197,7 @@ where
 
         // Advance the buffer
         self.tail = circular_add(self.tail, count, self.state.buffer.len());
-        self.available = self.available - count;
+        self.available -= count;
         self.state.tail.store(self.tail, Ordering::Relaxed);
         self.state.readers.wake();
 
@@ -220,7 +213,6 @@ where
     state: Arc<State<T, R>>,
     reader: Arc<SingleReader>,
     head: usize,
-    requested: usize,
     available: usize,
 }
 
@@ -255,7 +247,6 @@ impl<T> Clone for SourceImpl<T, MultipleReaders> {
             state: self.state.clone(),
             reader,
             head: self.head,
-            requested: self.requested,
             available: self.available,
         }
     }
@@ -266,19 +257,13 @@ where
     R: Readers,
 {
     fn source_impl(&self) -> &[T] {
-        unsafe { self.state.buffer.range(self.head, self.requested) }
+        unsafe { self.state.buffer.range(self.head, self.available) }
     }
 
     fn data_available(&mut self, count: usize) -> bool {
         let tail = self.state.tail.load(Ordering::Relaxed);
         self.available = circular_sub(tail, self.head, self.state.buffer.len());
-        if self.available >= count {
-            self.requested = count;
-            true
-        } else {
-            self.requested = 0;
-            false
-        }
+        self.available >= count
     }
 
     fn poll_request_impl(
@@ -298,6 +283,8 @@ where
         // The first check is efficient, but may spuriously fail.
         // The second check occurs after the `acquire` produced by registering the waker.
         if self.data_available(count) {
+            Poll::Ready(Ok(()))
+        } else {
             self.reader.waker.register(cx.waker());
             if self.data_available(count) {
                 Poll::Ready(Ok(()))
@@ -306,8 +293,6 @@ where
             } else {
                 Poll::Pending
             }
-        } else {
-            Poll::Ready(Ok(()))
         }
     }
 
@@ -322,7 +307,7 @@ where
 
         // Advance the head
         self.head = circular_add(self.head, count, self.state.buffer.len());
-        self.available = self.available - count;
+        self.available -= count;
         self.reader.head.store(self.head, Ordering::Relaxed);
         self.state.write_waker.wake();
 
@@ -333,7 +318,7 @@ where
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, Arc<SingleReader>> {
     fn source_mut_impl(&mut self) -> &mut [T] {
-        unsafe { self.state.buffer.range_mut(self.head, self.requested) }
+        unsafe { self.state.buffer.range_mut(self.head, self.available) }
     }
 }
 
@@ -365,13 +350,11 @@ pub mod spmc {
             BufferSink(SinkImpl {
                 state: state.clone(),
                 tail: 0,
-                requested: 0,
                 available: 0,
             }),
             BufferSource(SourceImpl {
                 state,
                 head: 0,
-                requested: 0,
                 available: 0,
                 reader,
             }),
@@ -472,14 +455,12 @@ pub mod spsc {
             BufferSink(SinkImpl {
                 state: state.clone(),
                 tail: 0,
-                requested: 0,
                 available: 0,
             }),
             BufferSource(SourceImpl {
                 state,
                 reader,
                 head: 0,
-                requested: 0,
                 available: 0,
             }),
         )
