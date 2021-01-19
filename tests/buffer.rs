@@ -1,7 +1,7 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::{
     buffer::circular_buffer::{spmc, spsc},
-    stream::{Error, Sink, Source},
+    Error, Sink, Source,
 };
 use std::hash::Hasher;
 use tokio::sync::oneshot;

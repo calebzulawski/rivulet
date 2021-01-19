@@ -63,19 +63,19 @@ macro_rules! future {
 }
 
 future! {
-    /// Future produced by [`Sink::reserve`](trait.Sink.html#method.reserve)
+    /// Future produced by [`Sink::reserve`].
     Sink => Reserve => poll_reserve
 }
 future! {
-    /// Future produced by [`Sink::commit`](trait.Sink.html#method.commit)
+    /// Future produced by [`Sink::commit`].
     Sink => Commit => poll_commit
 }
 future! {
-    /// Future produced by [`Source::request`](trait.Source.html#method.request)
+    /// Future produced by [`Source::request`].
     Source => Request => poll_request
 }
 future! {
-    /// Future produced by [`Source::consume`](trait.Source.html#method.consume)
+    /// Future produced by [`Source::consume`].
     Source => Consume => poll_consume
 }
 
@@ -88,12 +88,11 @@ pub trait Sink {
 
     /// The mutable buffer for writing data.
     ///
-    /// The size of this buffer is determined by successfully polling
-    /// [`poll_reserve`](trait.Sink.html#tymethod.poll_reserve), and isn't finalized until
-    /// successfully polling [`poll_commit`](trait.Sink.html#tymethod.poll_commit).
+    /// This buffer is obtained by successfully polling [`poll_reserve`](`Self::poll_reserve`) and
+    /// committed by successfully polling [`poll_commit`](`Self::poll_commit`).
     fn sink(&mut self) -> &mut [Self::Item];
 
-    /// Attempt to reserve `count` elements in the writable buffer.
+    /// Attempt to reserve at least `count` elements in the writable buffer.
     fn poll_reserve(
         self: Pin<&mut Self>,
         cx: &mut Context,
@@ -104,7 +103,9 @@ pub trait Sink {
     fn poll_commit(self: Pin<&mut Self>, cx: &mut Context, count: usize)
         -> Poll<Result<(), Error>>;
 
-    /// Create a future that reserves `count` elements in the writable buffer.
+    /// Create a future that reserves at least `count` elements in the writable buffer.
+    ///
+    /// See [`poll_reserve`](`Self::poll_reserve`).
     fn reserve(&mut self, count: usize) -> Reserve<'_, Self>
     where
         Self: Sized + Unpin,
@@ -117,6 +118,8 @@ pub trait Sink {
 
     /// Create a future that commits the first `count` elements in the writable buffer to the
     /// stream.
+    ///
+    /// See [`poll_commit`](`Self::poll_commit`).
     fn commit(&mut self, count: usize) -> Commit<'_, Self>
     where
         Self: Sized + Unpin,
@@ -161,12 +164,11 @@ pub trait Source {
 
     /// The buffer for reading data.
     ///
-    /// The size of this buffer is determined by successfully polling
-    /// [`poll_request`](trait.Source.html#tymethod.poll_request), and is advanced by
-    /// successfully polling [`poll_consume`](trait.Source.html#tymethod.poll_consume).
+    /// This buffer is obtained by successfully polling [`poll_request`](`Self::poll_request`) and
+    /// advanced by successfully polling [`poll_consume`](`Self::poll_consume`).
     fn source(&self) -> &[Self::Item];
 
-    /// Attempt to read `count` elements into the buffer.
+    /// Attempt to read at least `count` elements into the buffer.
     fn poll_request(
         self: Pin<&mut Self>,
         cx: &mut Context,
@@ -180,7 +182,9 @@ pub trait Source {
         count: usize,
     ) -> Poll<Result<(), Error>>;
 
-    /// Create a future that reads `count` elements into the buffer.
+    /// Create a future that reads at least `count` elements into the buffer.
+    ///
+    /// See [`poll_request`](`Self::poll_request`).
     fn request(&mut self, count: usize) -> Request<'_, Self>
     where
         Self: Sized + Unpin,
@@ -192,6 +196,8 @@ pub trait Source {
     }
 
     /// Create a future that advances past the first `count` elements in the buffer.
+    ///
+    /// See [`poll_consume`](`Self::poll_consume`).
     fn consume(&mut self, count: usize) -> Consume<'_, Self>
     where
         Self: Sized + Unpin,
@@ -232,7 +238,7 @@ pub trait SourceMut: Source {
     /// The mutable buffer for reading data.
     ///
     /// Identical semantics to [`source`](trait.Source.html#tymethod.source), but returns a mutable
-    /// reference.
+    /// slice.
     fn source_mut(&mut self) -> &mut [Self::Item];
 }
 
