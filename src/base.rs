@@ -129,6 +129,27 @@ pub trait Sink {
             count,
         }
     }
+
+    /// Reserve at least `count` elements in the writable buffer, blocking the current thread.
+    ///
+    /// See [`poll_reserve`](`Sink::poll_reserve`).
+    fn blocking_reserve(&mut self, count: usize) -> Result<(), Error>
+    where
+        Self: Sized + Unpin,
+    {
+        futures::executor::block_on(self.reserve(count))
+    }
+
+    /// Commit the first `count` elements in the writable buffer to the stream, blocking the
+    /// current thread.
+    ///
+    /// See [`poll_commit`](`Sink::poll_commit`).
+    fn blocking_commit(&mut self, count: usize) -> Result<(), Error>
+    where
+        Self: Sized + Unpin,
+    {
+        futures::executor::block_on(self.commit(count))
+    }
 }
 
 impl<S: ?Sized + Sink + Unpin> Sink for &mut S {
@@ -206,6 +227,26 @@ pub trait Source {
             handle: self,
             count,
         }
+    }
+
+    /// Reads at least `count` elements into the buffer, blocking the current thread.
+    ///
+    /// See [`poll_request`](`Source::poll_request`).
+    fn blocking_request(&mut self, count: usize) -> Result<(), Error>
+    where
+        Self: Sized + Unpin,
+    {
+        futures::executor::block_on(self.request(count))
+    }
+
+    /// Advances past the first `count` elements in the buffer, blocking the current thread.
+    ///
+    /// See [`poll_consume`](`Source::poll_consume`).
+    fn blocking_consume(&mut self, count: usize) -> Result<(), Error>
+    where
+        Self: Sized + Unpin,
+    {
+        futures::executor::block_on(self.consume(count))
     }
 }
 

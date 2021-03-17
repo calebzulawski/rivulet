@@ -11,12 +11,12 @@ edition = "2018"
 
 [features]
 default = ["buffer"]
-buffer = ["futures", "num-integer"]
+buffer = ["num-integer"]
 
 [dependencies]
 pin-project = "1"
-futures = { version = "0.3", optional = true }
-num-integer = { version = "0.1", optional = true }
+futures = { version = "0.3", default-features = false, features = ["executor"] }
+num-integer = { version = "0.1", default-features = false, optional = true }
 vmap = "0.4.3"
 
 [dev-dependencies]
