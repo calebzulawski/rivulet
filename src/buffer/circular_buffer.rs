@@ -322,6 +322,9 @@ impl<T> SourceImpl<T, Arc<SingleReader>> {
 }
 
 /// A single-producer, multiple-consumer async circular buffer.
+///
+/// This buffer has readers that implement `Clone`, at the cost of locking.  For a lock-free buffer
+/// see [`spsc`].
 pub mod spmc {
     use super::*;
 
@@ -431,6 +434,10 @@ pub mod spmc {
 }
 
 /// A single-producer, single-consumer async circular buffer.
+///
+/// This buffer is lock-free.
+///
+/// For a multiple-reader buffer see [`spmc`].
 pub mod spsc {
     use super::*;
 
