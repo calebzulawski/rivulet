@@ -542,6 +542,13 @@
 <span id="539">539</span>
 <span id="540">540</span>
 <span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">buffer</span>::<span class="ident">unsafe_circular_buffer</span>::<span class="ident">UnsafeCircularBuffer</span>, <span class="ident">Error</span>, <span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">SourceMut</span>};
 <span class="kw">use</span> <span class="ident">futures</span>::<span class="ident">task</span>::<span class="ident">AtomicWaker</span>;
@@ -867,6 +874,9 @@
 }
 
 <span class="doccomment">/// A single-producer, multiple-consumer async circular buffer.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This buffer has readers that implement `Clone`, at the cost of locking.  For a lock-free buffer</span>
+<span class="doccomment">/// see [`spsc`].</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">spmc</span> {
     <span class="kw">use</span> <span class="kw">super</span>::<span class="kw-2">*</span>;
 
@@ -976,6 +986,10 @@
 }
 
 <span class="doccomment">/// A single-producer, single-consumer async circular buffer.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This buffer is lock-free.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// For a multiple-reader buffer see [`spmc`].</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">spsc</span> {
     <span class="kw">use</span> <span class="kw">super</span>::<span class="kw-2">*</span>;
 

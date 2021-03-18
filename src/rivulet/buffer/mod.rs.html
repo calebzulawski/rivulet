@@ -7,10 +7,16 @@
 <span id="4">4</span>
 <span id="5">5</span>
 <span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Asynchronous buffers for temporarily caching data.</span>
 
 <span class="doccomment">/// Async circular buffers.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// These buffers are optimized for contiguous memory segments and never copy data to other regions</span>
+<span class="doccomment">/// of the buffer.</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">circular_buffer</span>;
 
 <span class="kw">mod</span> <span class="ident">unsafe_circular_buffer</span>;
