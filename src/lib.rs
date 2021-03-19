@@ -6,5 +6,5 @@ pub use base::*;
 #[cfg(feature = "buffer")]
 pub mod buffer;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "io")]
 pub mod io;

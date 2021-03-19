@@ -10,15 +10,15 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-default = ["std", "buffer"]
-std = []
-buffer = ["num-integer"]
+default = ["io", "buffer"]
+io = []
+buffer = ["num-integer", "vmap"]
 
 [dependencies]
 pin-project = "1"
 futures = { version = "0.3", default-features = false, features = ["executor"] }
 num-integer = { version = "0.1", default-features = false, optional = true }
-vmap = "0.4.3"
+vmap = { version = "0.4.3", optional = true }
 
 [dev-dependencies]
 seahash = "3"

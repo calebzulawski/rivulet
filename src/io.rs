@@ -106,7 +106,7 @@ where
 
             // Write to the sink
             let buf = &mut pinned.sink.sink()[*pinned.position..];
-            if buf.len() > 0 {
+            if !buf.is_empty() {
                 match pinned.read.read(buf) {
                     Ok(count) => {
                         *pinned.position += count;
