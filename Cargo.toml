@@ -10,7 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-default = ["buffer"]
+default = ["std", "buffer"]
+std = []
 buffer = ["num-integer"]
 
 [dependencies]
