@@ -14,8 +14,8 @@ pub enum Error {
     /// The request is malformed and results in a buffer overflow.
     Overflow,
 
-    /// Some other implementation-specific error.
-    Other(Box<dyn std::error::Error + Send>),
+    /// An I/O error occurred.
+    IO(std::io::Error),
 }
 
 impl std::fmt::Display for Error {
@@ -23,7 +23,7 @@ impl std::fmt::Display for Error {
         match self {
             Self::Closed => writeln!(f, "the stream has been closed"),
             Self::Overflow => writeln!(f, "buffer overflow"),
-            Self::Other(err) => writeln!(f, "{}", err),
+            Self::IO(err) => writeln!(f, "{}", err),
         }
     }
 }
@@ -31,8 +31,23 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Other(ref err) => err.source(),
+            Self::IO(ref err) => err.source(),
             _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::IO(error)
+    }
+}
+
+impl Error {
+    pub(crate) fn to_io(self) -> std::io::Error {
+        match self {
+            Self::IO(e) => e,
+            e => std::io::Error::new(std::io::ErrorKind::Other, Box::new(e)),
         }
     }
 }
