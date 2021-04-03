@@ -1,14 +1,14 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::{
     buffer::circular_buffer::{spmc, spsc},
-    Error, Sink, Source,
+    Error, Stream, StreamMut,
 };
 use std::hash::Hasher;
 use tokio::sync::oneshot;
 
 static BUFFER_SIZE: usize = 4096;
 
-async fn write<T: Sink<Item = i64> + Send + Unpin>(
+async fn write<T: StreamMut<Item = i64> + Send + Unpin>(
     mut sink: T,
     block: usize,
     count: usize,
@@ -17,37 +17,37 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
-        sink.reserve(block).await.unwrap();
-        for value in &mut sink.sink()[..block] {
+        sink.grant(block).await.unwrap();
+        for value in &mut sink.stream_mut()[..block] {
             *value = rng.gen();
             hasher.write_i64(*value);
         }
-        sink.commit(block).await.unwrap();
+        sink.release(block).await.unwrap();
     }
     sender.send(hasher.finish()).unwrap();
 }
 
-async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
+async fn read<T: Stream<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     let mut closed = false;
     while !closed {
         let count = rng.gen_range(1, BUFFER_SIZE);
-        match source.request(count).await {
+        match source.grant(count).await {
             Err(Error::Closed) => {
                 closed = true;
-                assert!(source.source().len() <= count);
+                assert!(source.stream().len() <= count);
             }
             x => {
                 x.unwrap();
-                assert!(source.source().len() >= count);
+                assert!(source.stream().len() >= count);
             }
         }
-        for value in source.source() {
+        for value in source.stream() {
             hasher.write_i64(*value);
         }
-        let consumed = source.source().len();
-        source.consume(consumed).await.unwrap();
+        let released = source.stream().len();
+        source.release(released).await.unwrap();
     }
     sender.send(hasher.finish()).unwrap();
 }

@@ -1,4 +1,4 @@
-use crate::{buffer::unsafe_circular_buffer::UnsafeCircularBuffer, Error, Sink, Source, SourceMut};
+use crate::{buffer::unsafe_circular_buffer::UnsafeCircularBuffer, Error, Stream, StreamMut};
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
 use std::{
@@ -130,7 +130,11 @@ impl<T, R> SinkImpl<T, R>
 where
     R: Readers,
 {
-    fn sink_impl(&mut self) -> &mut [T] {
+    fn stream_impl(&self) -> &[T] {
+        unsafe { self.state.buffer.range(self.tail, self.available) }
+    }
+
+    fn stream_mut_impl(&mut self) -> &mut [T] {
         unsafe { self.state.buffer.range_mut(self.tail, self.available) }
     }
 
@@ -144,12 +148,12 @@ where
             self.state
                 .readers
                 .load_head(self.tail, self.state.buffer.len(), Ordering::Relaxed);
-        let reserved = circular_sub(self.tail, head, self.state.buffer.len());
-        self.available = self.max_len() - reserved;
+        let granted = circular_sub(self.tail, head, self.state.buffer.len());
+        self.available = self.max_len() - granted;
         self.available >= count
     }
 
-    fn poll_reserve_impl(
+    fn poll_grant_impl(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
@@ -180,7 +184,7 @@ where
         }
     }
 
-    fn poll_commit_impl(
+    fn poll_release_impl(
         mut self: Pin<&mut Self>,
         _: &mut Context,
         count: usize,
@@ -189,7 +193,7 @@ where
             return Poll::Ready(Ok(()));
         }
 
-        // Ensure that the commit is possible with the current reservation
+        // Ensure that the release is possible with the current reservation
         if count > self.available {
             return Poll::Ready(Err(Error::Overflow));
         }
@@ -255,7 +259,7 @@ impl<T, R> SourceImpl<T, R>
 where
     R: Readers,
 {
-    fn source_impl(&self) -> &[T] {
+    fn stream_impl(&self) -> &[T] {
         unsafe { self.state.buffer.range(self.head, self.available) }
     }
 
@@ -265,7 +269,7 @@ where
         self.available >= count
     }
 
-    fn poll_request_impl(
+    fn poll_grant_impl(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
@@ -295,7 +299,7 @@ where
         }
     }
 
-    fn poll_consume_impl(
+    fn poll_release_impl(
         mut self: Pin<&mut Self>,
         _: &mut Context,
         count: usize,
@@ -316,27 +320,25 @@ where
 
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, Arc<SingleReader>> {
-    fn source_mut_impl(&mut self) -> &mut [T] {
+    fn stream_mut_impl(&mut self) -> &mut [T] {
         unsafe { self.state.buffer.range_mut(self.head, self.available) }
     }
 }
 
-/// A single-producer, multiple-consumer async circular buffer.
+/// A single-producer, multiple-releaser async circular buffer.
 ///
 /// This buffer has readers that implement `Clone`, at the cost of locking.  For a lock-free buffer
 /// see [`spsc`].
 pub mod spmc {
     use super::*;
 
-    /// Creates a single-producer, multiple-consumer async circular buffer.
+    /// Creates a single-producer, multiple-releaser async circular buffer.
     ///
     /// The buffer can store at least `min_size` elements, but might hold more.
     ///
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn buffer<T: Send + Sync + Default + 'static>(
-        min_size: usize,
-    ) -> (BufferSink<T>, BufferSource<T>) {
+    pub fn buffer<T: Send + Sync + Default + 'static>(min_size: usize) -> (Sink<T>, Source<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
 
         let reader = Arc::new(SingleReader {
@@ -349,12 +351,12 @@ pub mod spmc {
         let state = Arc::new(State::new(min_size, MultipleReaders { readers }));
 
         (
-            BufferSink(SinkImpl {
+            Sink(SinkImpl {
                 state: state.clone(),
                 tail: 0,
                 available: 0,
             }),
-            BufferSource(SourceImpl {
+            Source(SourceImpl {
                 state,
                 head: 0,
                 available: 0,
@@ -363,72 +365,78 @@ pub mod spmc {
         )
     }
 
-    /// Write values to the associated `BufferSource`s.
+    /// Write values to the associated `Source`s.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, MultipleReaders>);
+    pub struct Sink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, MultipleReaders>);
 
-    /// Read values from the associated `BufferSink`.
+    /// Read values from the associated `Sink`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
     #[derive(Clone)]
-    pub struct BufferSource<T>(#[pin] SourceImpl<T, MultipleReaders>);
+    pub struct Source<T>(#[pin] SourceImpl<T, MultipleReaders>);
 
-    impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
+    impl<T: Send + Sync + 'static> Stream for Sink<T> {
         type Item = T;
 
-        fn sink(&mut self) -> &mut [Self::Item] {
-            self.0.sink_impl()
+        fn stream(&self) -> &[Self::Item] {
+            self.0.stream_impl()
         }
 
-        fn poll_reserve(
+        fn poll_grant(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_reserve_impl(cx, count)
+            pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_commit(
+        fn poll_release(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_commit_impl(cx, count)
+            pinned.0.poll_release_impl(cx, count)
         }
     }
 
-    impl<T> Source for BufferSource<T> {
+    impl<T: Send + Sync + 'static> StreamMut for Sink<T> {
+        fn stream_mut(&mut self) -> &mut [Self::Item] {
+            self.0.stream_mut_impl()
+        }
+    }
+
+    impl<T> Stream for Source<T> {
         type Item = T;
 
-        fn source(&self) -> &[Self::Item] {
-            self.0.source_impl()
+        fn stream(&self) -> &[Self::Item] {
+            self.0.stream_impl()
         }
 
-        fn poll_request(
+        fn poll_grant(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_request_impl(cx, count)
+            pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_consume(
+        fn poll_release(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_consume_impl(cx, count)
+            pinned.0.poll_release_impl(cx, count)
         }
     }
 }
@@ -446,9 +454,7 @@ pub mod spsc {
     /// The buffer can store at least `min_size` elements, but might hold more.
     /// # Panics
     /// Panics if `min_size` is 0.
-    pub fn buffer<T: Send + Sync + Default + 'static>(
-        min_size: usize,
-    ) -> (BufferSink<T>, BufferSource<T>) {
+    pub fn buffer<T: Send + Sync + Default + 'static>(min_size: usize) -> (Sink<T>, Source<T>) {
         assert!(min_size > 0, "`min_size` must be greater than 0");
 
         let reader = Arc::new(SingleReader {
@@ -458,12 +464,12 @@ pub mod spsc {
         let state = Arc::new(State::new(min_size, reader.clone()));
 
         (
-            BufferSink(SinkImpl {
+            Sink(SinkImpl {
                 state: state.clone(),
                 tail: 0,
                 available: 0,
             }),
-            BufferSource(SourceImpl {
+            Source(SourceImpl {
                 state,
                 reader,
                 head: 0,
@@ -472,77 +478,83 @@ pub mod spsc {
         )
     }
 
-    /// Write values to the associated `BufferSource`.
+    /// Write values to the associated `Source`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, Arc<SingleReader>>);
+    pub struct Sink<T: Send + Sync + 'static>(#[pin] SinkImpl<T, Arc<SingleReader>>);
 
-    /// Read values from the associated `BufferSink`.
+    /// Read values from the associated `Sink`.
     ///
     /// Created by the [`buffer`] function.
     ///
     /// [`buffer`]: fn.buffer.html
     #[pin_project]
-    pub struct BufferSource<T>(#[pin] SourceImpl<T, Arc<SingleReader>>);
+    pub struct Source<T>(#[pin] SourceImpl<T, Arc<SingleReader>>);
 
-    impl<T: Send + Sync + 'static> Sink for BufferSink<T> {
+    impl<T: Send + Sync + 'static> Stream for Sink<T> {
         type Item = T;
 
-        fn sink(&mut self) -> &mut [Self::Item] {
-            self.0.sink_impl()
+        fn stream(&self) -> &[Self::Item] {
+            self.0.stream_impl()
         }
 
-        fn poll_reserve(
+        fn poll_grant(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_reserve_impl(cx, count)
+            pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_commit(
+        fn poll_release(
             self: Pin<&mut Self>,
             cx: &mut Context,
             count: usize,
         ) -> Poll<Result<(), Error>> {
             let pinned = self.project();
-            pinned.0.poll_commit_impl(cx, count)
+            pinned.0.poll_release_impl(cx, count)
         }
     }
 
-    impl<T> Source for BufferSource<T> {
-        type Item = T;
-
-        fn source(&self) -> &[Self::Item] {
-            self.0.source_impl()
-        }
-
-        fn poll_request(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Error>> {
-            let pinned = self.project();
-            pinned.0.poll_request_impl(cx, count)
-        }
-
-        fn poll_consume(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Error>> {
-            let pinned = self.project();
-            pinned.0.poll_consume_impl(cx, count)
+    impl<T: Send + Sync + 'static> StreamMut for Sink<T> {
+        fn stream_mut(&mut self) -> &mut [Self::Item] {
+            self.0.stream_mut_impl()
         }
     }
 
-    impl<T> SourceMut for BufferSource<T> {
-        fn source_mut(&mut self) -> &mut [Self::Item] {
-            self.0.source_mut_impl()
+    impl<T> Stream for Source<T> {
+        type Item = T;
+
+        fn stream(&self) -> &[Self::Item] {
+            self.0.stream_impl()
+        }
+
+        fn poll_grant(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_grant_impl(cx, count)
+        }
+
+        fn poll_release(
+            self: Pin<&mut Self>,
+            cx: &mut Context,
+            count: usize,
+        ) -> Poll<Result<(), Error>> {
+            let pinned = self.project();
+            pinned.0.poll_release_impl(cx, count)
+        }
+    }
+
+    impl<T> StreamMut for Source<T> {
+        fn stream_mut(&mut self) -> &mut [Self::Item] {
+            self.0.stream_mut_impl()
         }
     }
 }

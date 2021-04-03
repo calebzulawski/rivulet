@@ -5,7 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// An error produced when polling a [`Sink`](trait.Sink.html) or [`Source`](trait.Source.html).
+/// An error produced when polling a [`Stream`](trait.Stream.html).
 #[derive(Debug)]
 pub enum Error {
     /// The stream is closed and cannot be accessed.
@@ -53,7 +53,7 @@ impl Error {
 }
 
 macro_rules! future {
-    { $(#[$attr:meta])* $trait:ident => $type:ident => $poll:ident } => {
+    { $(#[$attr:meta])* $type:ident => $poll:ident } => {
         $(#[$attr])*
         #[pin_project]
         pub struct $type<'a, T> {
@@ -64,7 +64,7 @@ macro_rules! future {
 
         impl<'a, T> Future for $type<'a, T>
         where
-            T: $trait + Unpin,
+            T: Stream + Unpin,
         {
             type Output = Result<(), Error>;
 
@@ -78,141 +78,34 @@ macro_rules! future {
 }
 
 future! {
-    /// Future produced by [`Sink::reserve`].
-    Sink => Reserve => poll_reserve
+    /// Future produced by [`Stream::grant`].
+    Request => poll_grant
 }
 future! {
-    /// Future produced by [`Sink::commit`].
-    Sink => Commit => poll_commit
-}
-future! {
-    /// Future produced by [`Source::request`].
-    Source => Request => poll_request
-}
-future! {
-    /// Future produced by [`Source::consume`].
-    Source => Consume => poll_consume
+    /// Future produced by [`Stream::release`].
+    Consume => poll_release
 }
 
-/// Interface for asynchronous contiguous-memory sinks.
-///
-/// Implementors of `Sink` may be called "writers".
-pub trait Sink {
-    /// The type to be written.
-    type Item;
-
-    /// The mutable buffer for writing data.
-    ///
-    /// This buffer is obtained by successfully polling [`poll_reserve`](`Self::poll_reserve`) and
-    /// committed by successfully polling [`poll_commit`](`Self::poll_commit`).
-    fn sink(&mut self) -> &mut [Self::Item];
-
-    /// Attempt to reserve at least `count` elements in the writable buffer.
-    fn poll_reserve(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Error>>;
-
-    /// Attempt to commit the first `count` elements in the writable buffer to the stream.
-    fn poll_commit(self: Pin<&mut Self>, cx: &mut Context, count: usize)
-        -> Poll<Result<(), Error>>;
-
-    /// Create a future that reserves at least `count` elements in the writable buffer.
-    ///
-    /// See [`poll_reserve`](`Self::poll_reserve`).
-    fn reserve(&mut self, count: usize) -> Reserve<'_, Self>
-    where
-        Self: Sized + Unpin,
-    {
-        Reserve {
-            handle: self,
-            count,
-        }
-    }
-
-    /// Create a future that commits the first `count` elements in the writable buffer to the
-    /// stream.
-    ///
-    /// See [`poll_commit`](`Self::poll_commit`).
-    fn commit(&mut self, count: usize) -> Commit<'_, Self>
-    where
-        Self: Sized + Unpin,
-    {
-        Commit {
-            handle: self,
-            count,
-        }
-    }
-
-    /// Reserve at least `count` elements in the writable buffer, blocking the current thread.
-    ///
-    /// See [`poll_reserve`](`Sink::poll_reserve`).
-    fn blocking_reserve(&mut self, count: usize) -> Result<(), Error>
-    where
-        Self: Sized + Unpin,
-    {
-        futures::executor::block_on(self.reserve(count))
-    }
-
-    /// Commit the first `count` elements in the writable buffer to the stream, blocking the
-    /// current thread.
-    ///
-    /// See [`poll_commit`](`Sink::poll_commit`).
-    fn blocking_commit(&mut self, count: usize) -> Result<(), Error>
-    where
-        Self: Sized + Unpin,
-    {
-        futures::executor::block_on(self.commit(count))
-    }
-}
-
-impl<S: ?Sized + Sink + Unpin> Sink for &mut S {
-    type Item = S::Item;
-
-    fn sink(&mut self) -> &mut [Self::Item] {
-        Sink::sink(*self)
-    }
-
-    fn poll_reserve(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Error>> {
-        S::poll_reserve(Pin::new(&mut **self), cx, count)
-    }
-
-    fn poll_commit(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Error>> {
-        S::poll_commit(Pin::new(&mut **self), cx, count)
-    }
-}
-
-/// Interface for asynchronous contiguous-memory sources.
-///
-/// Implementors of `Source` may be called "readers".
-pub trait Source {
+/// Interface for asynchronous contiguous-memory streams.
+pub trait Stream {
     /// The type to be read.
     type Item;
 
     /// The buffer for reading data.
     ///
-    /// This buffer is obtained by successfully polling [`poll_request`](`Self::poll_request`) and
-    /// advanced by successfully polling [`poll_consume`](`Self::poll_consume`).
-    fn source(&self) -> &[Self::Item];
+    /// This buffer is obtained by successfully polling [`poll_grant`](`Self::poll_grant`) and
+    /// advanced by successfully polling [`poll_release`](`Self::poll_release`).
+    fn stream(&self) -> &[Self::Item];
 
     /// Attempt to read at least `count` elements into the buffer.
-    fn poll_request(
+    fn poll_grant(
         self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>>;
 
     /// Attempt to advance past the first `count` elements in the buffer.
-    fn poll_consume(
+    fn poll_release(
         self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
@@ -220,8 +113,8 @@ pub trait Source {
 
     /// Create a future that reads at least `count` elements into the buffer.
     ///
-    /// See [`poll_request`](`Self::poll_request`).
-    fn request(&mut self, count: usize) -> Request<'_, Self>
+    /// See [`poll_grant`](`Self::poll_grant`).
+    fn grant(&mut self, count: usize) -> Request<'_, Self>
     where
         Self: Sized + Unpin,
     {
@@ -233,8 +126,8 @@ pub trait Source {
 
     /// Create a future that advances past the first `count` elements in the buffer.
     ///
-    /// See [`poll_consume`](`Self::poll_consume`).
-    fn consume(&mut self, count: usize) -> Consume<'_, Self>
+    /// See [`poll_release`](`Self::poll_release`).
+    fn release(&mut self, count: usize) -> Consume<'_, Self>
     where
         Self: Sized + Unpin,
     {
@@ -246,60 +139,60 @@ pub trait Source {
 
     /// Reads at least `count` elements into the buffer, blocking the current thread.
     ///
-    /// See [`poll_request`](`Source::poll_request`).
-    fn blocking_request(&mut self, count: usize) -> Result<(), Error>
+    /// See [`poll_grant`](`Stream::poll_grant`).
+    fn blocking_grant(&mut self, count: usize) -> Result<(), Error>
     where
         Self: Sized + Unpin,
     {
-        futures::executor::block_on(self.request(count))
+        futures::executor::block_on(self.grant(count))
     }
 
     /// Advances past the first `count` elements in the buffer, blocking the current thread.
     ///
-    /// See [`poll_consume`](`Source::poll_consume`).
-    fn blocking_consume(&mut self, count: usize) -> Result<(), Error>
+    /// See [`poll_release`](`Stream::poll_release`).
+    fn blocking_release(&mut self, count: usize) -> Result<(), Error>
     where
         Self: Sized + Unpin,
     {
-        futures::executor::block_on(self.consume(count))
+        futures::executor::block_on(self.release(count))
     }
 }
 
-impl<S: ?Sized + Source + Unpin> Source for &mut S {
+impl<S: ?Sized + Stream + Unpin> Stream for &mut S {
     type Item = S::Item;
 
-    fn source(&self) -> &[Self::Item] {
-        Source::source(*self)
+    fn stream(&self) -> &[Self::Item] {
+        Stream::stream(*self)
     }
 
-    fn poll_request(
+    fn poll_grant(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        S::poll_request(Pin::new(&mut **self), cx, count)
+        S::poll_grant(Pin::new(&mut **self), cx, count)
     }
 
-    fn poll_consume(
+    fn poll_release(
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Error>> {
-        S::poll_consume(Pin::new(&mut **self), cx, count)
+        S::poll_release(Pin::new(&mut **self), cx, count)
     }
 }
 
-/// Interface for asynchronous contiguous-memory mutable sources.
-pub trait SourceMut: Source {
+/// Interface for asynchronous contiguous-memory mutable streams.
+pub trait StreamMut: Stream {
     /// The mutable buffer for reading data.
     ///
-    /// Identical semantics to [`source`](trait.Source.html#tymethod.source), but returns a mutable
+    /// Identical semantics to [`stream`](trait.Stream.html#tymethod.stream), but returns a mutable
     /// slice.
-    fn source_mut(&mut self) -> &mut [Self::Item];
+    fn stream_mut(&mut self) -> &mut [Self::Item];
 }
 
-impl<S: ?Sized + SourceMut + Unpin> SourceMut for &mut S {
-    fn source_mut(&mut self) -> &mut [Self::Item] {
-        SourceMut::source_mut(*self)
+impl<S: ?Sized + StreamMut + Unpin> StreamMut for &mut S {
+    fn stream_mut(&mut self) -> &mut [Self::Item] {
+        StreamMut::stream_mut(*self)
     }
 }
