@@ -1,4 +1,4 @@
-use crate::{buffer::unsafe_circular_buffer::UnsafeCircularBuffer, Error, Stream, StreamMut};
+use crate::{buffer::unsafe_circular_buffer::UnsafeCircularBuffer, Error, View, ViewMut};
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
 use std::{
@@ -130,11 +130,11 @@ impl<T, R> SinkImpl<T, R>
 where
     R: Readers,
 {
-    fn stream_impl(&self) -> &[T] {
+    fn view_impl(&self) -> &[T] {
         unsafe { self.state.buffer.range(self.tail, self.available) }
     }
 
-    fn stream_mut_impl(&mut self) -> &mut [T] {
+    fn view_mut_impl(&mut self) -> &mut [T] {
         unsafe { self.state.buffer.range_mut(self.tail, self.available) }
     }
 
@@ -259,7 +259,7 @@ impl<T, R> SourceImpl<T, R>
 where
     R: Readers,
 {
-    fn stream_impl(&self) -> &[T] {
+    fn view_impl(&self) -> &[T] {
         unsafe { self.state.buffer.range(self.head, self.available) }
     }
 
@@ -320,7 +320,7 @@ where
 
 // If there is a single reader, it can obtain mutable access
 impl<T> SourceImpl<T, Arc<SingleReader>> {
-    fn stream_mut_impl(&mut self) -> &mut [T] {
+    fn view_mut_impl(&mut self) -> &mut [T] {
         unsafe { self.state.buffer.range_mut(self.head, self.available) }
     }
 }
@@ -382,11 +382,11 @@ pub mod spmc {
     #[derive(Clone)]
     pub struct Source<T>(#[pin] SourceImpl<T, MultipleReaders>);
 
-    impl<T: Send + Sync + 'static> Stream for Sink<T> {
+    impl<T: Send + Sync + 'static> View for Sink<T> {
         type Item = T;
 
-        fn stream(&self) -> &[Self::Item] {
-            self.0.stream_impl()
+        fn view(&self) -> &[Self::Item] {
+            self.0.view_impl()
         }
 
         fn poll_grant(
@@ -408,17 +408,17 @@ pub mod spmc {
         }
     }
 
-    impl<T: Send + Sync + 'static> StreamMut for Sink<T> {
-        fn stream_mut(&mut self) -> &mut [Self::Item] {
-            self.0.stream_mut_impl()
+    impl<T: Send + Sync + 'static> ViewMut for Sink<T> {
+        fn view_mut(&mut self) -> &mut [Self::Item] {
+            self.0.view_mut_impl()
         }
     }
 
-    impl<T> Stream for Source<T> {
+    impl<T> View for Source<T> {
         type Item = T;
 
-        fn stream(&self) -> &[Self::Item] {
-            self.0.stream_impl()
+        fn view(&self) -> &[Self::Item] {
+            self.0.view_impl()
         }
 
         fn poll_grant(
@@ -439,6 +439,9 @@ pub mod spmc {
             pinned.0.poll_release_impl(cx, count)
         }
     }
+
+    impl<T> crate::Source for Source<T> {}
+    impl<T: Send + Sync + 'static> crate::Sink for Sink<T> {}
 }
 
 /// A single-producer, single-consumer async circular buffer.
@@ -494,11 +497,11 @@ pub mod spsc {
     #[pin_project]
     pub struct Source<T>(#[pin] SourceImpl<T, Arc<SingleReader>>);
 
-    impl<T: Send + Sync + 'static> Stream for Sink<T> {
+    impl<T: Send + Sync + 'static> View for Sink<T> {
         type Item = T;
 
-        fn stream(&self) -> &[Self::Item] {
-            self.0.stream_impl()
+        fn view(&self) -> &[Self::Item] {
+            self.0.view_impl()
         }
 
         fn poll_grant(
@@ -520,17 +523,17 @@ pub mod spsc {
         }
     }
 
-    impl<T: Send + Sync + 'static> StreamMut for Sink<T> {
-        fn stream_mut(&mut self) -> &mut [Self::Item] {
-            self.0.stream_mut_impl()
+    impl<T: Send + Sync + 'static> ViewMut for Sink<T> {
+        fn view_mut(&mut self) -> &mut [Self::Item] {
+            self.0.view_mut_impl()
         }
     }
 
-    impl<T> Stream for Source<T> {
+    impl<T> View for Source<T> {
         type Item = T;
 
-        fn stream(&self) -> &[Self::Item] {
-            self.0.stream_impl()
+        fn view(&self) -> &[Self::Item] {
+            self.0.view_impl()
         }
 
         fn poll_grant(
@@ -552,9 +555,12 @@ pub mod spsc {
         }
     }
 
-    impl<T> StreamMut for Source<T> {
-        fn stream_mut(&mut self) -> &mut [Self::Item] {
-            self.0.stream_mut_impl()
+    impl<T> ViewMut for Source<T> {
+        fn view_mut(&mut self) -> &mut [Self::Item] {
+            self.0.view_mut_impl()
         }
     }
+
+    impl<T> crate::Source for Source<T> {}
+    impl<T: Send + Sync + 'static> crate::Sink for Sink<T> {}
 }
