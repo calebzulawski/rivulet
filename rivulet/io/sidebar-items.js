@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["Error","An error produced either by an I/O operation or by a stream interface."]],"struct":[["ReadToSink","Buffers a [`std::io::Read`] into a `Sink`."],["WriteFromSource","Buffers a [`std::io::Write`] from a `Source`."]]});
+initSidebarItems({"struct":[["Reader","Implements `std::io::Read` for a source."]]});
