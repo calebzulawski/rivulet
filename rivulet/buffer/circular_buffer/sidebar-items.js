@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["spmc","A single-producer, multiple-consumer async circular buffer."],["spsc","A single-producer, single-consumer async circular buffer."]]});
+initSidebarItems({"mod":[["spmc","A single-producer, multiple-releaser async circular buffer."],["spsc","A single-producer, single-consumer async circular buffer."]]});

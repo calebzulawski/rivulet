@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["buffer","Creates a single-producer, single-consumer async circular buffer."]],"struct":[["BufferSink","Write values to the associated `BufferSource`."],["BufferSource","Read values from the associated `BufferSink`."]]});
+initSidebarItems({"fn":[["buffer","Creates a single-producer, single-consumer async circular buffer."]],"struct":[["Sink","Write values to the associated `Source`."],["Source","Read values from the associated `Sink`."]]});
