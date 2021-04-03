@@ -79,11 +79,11 @@ macro_rules! future {
 
 future! {
     /// Future produced by [`Stream::grant`].
-    Request => poll_grant
+    Grant => poll_grant
 }
 future! {
     /// Future produced by [`Stream::release`].
-    Consume => poll_release
+    Release => poll_release
 }
 
 /// Interface for asynchronous contiguous-memory streams.
@@ -98,11 +98,7 @@ pub trait Stream {
     fn stream(&self) -> &[Self::Item];
 
     /// Attempt to read at least `count` elements into the buffer.
-    fn poll_grant(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Error>>;
+    fn poll_grant(self: Pin<&mut Self>, cx: &mut Context, count: usize) -> Poll<Result<(), Error>>;
 
     /// Attempt to advance past the first `count` elements in the buffer.
     fn poll_release(
@@ -114,11 +110,11 @@ pub trait Stream {
     /// Create a future that reads at least `count` elements into the buffer.
     ///
     /// See [`poll_grant`](`Self::poll_grant`).
-    fn grant(&mut self, count: usize) -> Request<'_, Self>
+    fn grant(&mut self, count: usize) -> Grant<'_, Self>
     where
         Self: Sized + Unpin,
     {
-        Request {
+        Grant {
             handle: self,
             count,
         }
@@ -127,11 +123,11 @@ pub trait Stream {
     /// Create a future that advances past the first `count` elements in the buffer.
     ///
     /// See [`poll_release`](`Self::poll_release`).
-    fn release(&mut self, count: usize) -> Consume<'_, Self>
+    fn release(&mut self, count: usize) -> Release<'_, Self>
     where
         Self: Sized + Unpin,
     {
-        Consume {
+        Release {
             handle: self,
             count,
         }
