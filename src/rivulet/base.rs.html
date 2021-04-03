@@ -195,10 +195,6 @@
 <span id="192">192</span>
 <span id="193">193</span>
 <span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Traits defining common stream interfaces.</span>
 
@@ -281,11 +277,11 @@
 
 <span class="macro">future</span><span class="macro">!</span> {
     <span class="doccomment">/// Future produced by [`Stream::grant`].</span>
-    <span class="ident">Request</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_grant</span>
+    <span class="ident">Grant</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_grant</span>
 }
 <span class="macro">future</span><span class="macro">!</span> {
     <span class="doccomment">/// Future produced by [`Stream::release`].</span>
-    <span class="ident">Consume</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_release</span>
+    <span class="ident">Release</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_release</span>
 }
 
 <span class="doccomment">/// Interface for asynchronous contiguous-memory streams.</span>
@@ -300,11 +296,7 @@
     <span class="kw">fn</span> <span class="ident">stream</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span>::<span class="ident">Item</span>];
 
     <span class="doccomment">/// Attempt to read at least `count` elements into the buffer.</span>
-    <span class="kw">fn</span> <span class="ident">poll_grant</span>(
-        <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-        <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-        <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">poll_grant</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
     <span class="doccomment">/// Attempt to advance past the first `count` elements in the buffer.</span>
     <span class="kw">fn</span> <span class="ident">poll_release</span>(
@@ -316,11 +308,11 @@
     <span class="doccomment">/// Create a future that reads at least `count` elements into the buffer.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// See [`poll_grant`](`Self::poll_grant`).</span>
-    <span class="kw">fn</span> <span class="ident">grant</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Request</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">grant</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
     {
-        <span class="ident">Request</span> {
+        <span class="ident">Grant</span> {
             <span class="ident">handle</span>: <span class="self">self</span>,
             <span class="ident">count</span>,
         }
@@ -329,11 +321,11 @@
     <span class="doccomment">/// Create a future that advances past the first `count` elements in the buffer.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// See [`poll_release`](`Self::poll_release`).</span>
-    <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Consume</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Release</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
     {
-        <span class="ident">Consume</span> {
+        <span class="ident">Release</span> {
             <span class="ident">handle</span>: <span class="self">self</span>,
             <span class="ident">count</span>,
         }
