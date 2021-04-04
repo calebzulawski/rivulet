@@ -202,24 +202,3 @@ pub trait Source: View {}
 ///
 /// Any data in a released view is committed to the stream.
 pub trait Sink: ViewMut {}
-
-/// Obtain views with stable memory locations.
-///
-/// # Safety
-/// The lifetime of the pointers returned by this trait must be at least as long as the subview
-/// remains in the current view.
-pub unsafe trait StableView: View {
-    /// Obtain a stable subview of the current view, starting at `offset` elements from the start
-    /// of the current view and spanning `len` elements.
-    ///
-    /// The subview has the following qualities:
-    /// * It may not be written to.
-    /// * Adjacent or overlapping subviews are not guaranteed to be adjacent or overlapping in
-    /// memory.
-    /// * Dereferencing the pointer after the view is advanced past the start of the subview is
-    /// undefined behavior.
-    ///
-    /// # Panics
-    /// Panics if the subview would extend beyond the current view.
-    fn stable_view(&self, offset: usize, len: usize) -> *const Self::Item;
-}

@@ -24,3 +24,7 @@ vmap = { version = "0.4.3", optional = true }
 seahash = "3"
 rand = { version = "0.7", features = ["small_rng"] }
 tokio = { version = "0.2", default-features = false, features = ["sync", "rt-threaded", "macros"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
