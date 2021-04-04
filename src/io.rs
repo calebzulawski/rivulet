@@ -36,11 +36,11 @@ where
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            self.0.blocking_grant(1).map_err(crate::Error::to_io)?;
+            self.0.blocking_grant(1).map_err(crate::Error::into_io)?;
             buf.len().min(self.0.view().len())
         };
         buf[..len].copy_from_slice(&self.0.view()[..len]);
-        self.0.blocking_release(len).map_err(crate::Error::to_io)?;
+        self.0.blocking_release(len).map_err(crate::Error::into_io)?;
         Ok(len)
     }
 }
@@ -90,7 +90,7 @@ where
                     .source
                     .as_mut()
                     .poll_grant(cx, 1)
-                    .map_err(crate::Error::to_io))?;
+                    .map_err(crate::Error::into_io))?;
                 buf.len().min(pinned.source.view().len())
             };
             buf[..*pinned.len].copy_from_slice(&pinned.source.view()[..*pinned.len]);
@@ -100,7 +100,7 @@ where
             .as_mut()
             .poll_release(cx, *pinned.len)
             .map_ok(|_| std::mem::take(pinned.len)) // set to 0
-            .map_err(crate::Error::to_io)
+            .map_err(crate::Error::into_io)
     }
 }
 
@@ -134,11 +134,11 @@ where
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            self.0.blocking_grant(1).map_err(crate::Error::to_io)?;
+            self.0.blocking_grant(1).map_err(crate::Error::into_io)?;
             buf.len().min(self.0.view().len())
         };
         self.0.view_mut()[..len].copy_from_slice(&buf[..len]);
-        self.0.blocking_release(len).map_err(crate::Error::to_io)?;
+        self.0.blocking_release(len).map_err(crate::Error::into_io)?;
         Ok(len)
     }
 

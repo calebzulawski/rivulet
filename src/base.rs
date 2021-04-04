@@ -15,7 +15,7 @@ pub enum Error {
     Overflow,
 
     /// An I/O error occurred.
-    IO(std::io::Error),
+    Io(std::io::Error),
 }
 
 impl std::fmt::Display for Error {
@@ -23,7 +23,7 @@ impl std::fmt::Display for Error {
         match self {
             Self::Closed => writeln!(f, "the stream has been closed"),
             Self::Overflow => writeln!(f, "buffer overflow"),
-            Self::IO(err) => writeln!(f, "{}", err),
+            Self::Io(err) => writeln!(f, "{}", err),
         }
     }
 }
@@ -31,7 +31,7 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::IO(ref err) => err.source(),
+            Self::Io(ref err) => err.source(),
             _ => None,
         }
     }
@@ -39,14 +39,14 @@ impl std::error::Error for Error {
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
-        Self::IO(error)
+        Self::Io(error)
     }
 }
 
 impl Error {
-    pub(crate) fn to_io(self) -> std::io::Error {
+    pub(crate) fn into_io(self) -> std::io::Error {
         match self {
-            Self::IO(e) => e,
+            Self::Io(e) => e,
             e => std::io::Error::new(std::io::ErrorKind::Other, Box::new(e)),
         }
     }

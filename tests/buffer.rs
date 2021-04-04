@@ -1,14 +1,14 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::{
     buffer::circular_buffer::{spmc, spsc},
-    Error, Stream, StreamMut,
+    Error, Sink, Source,
 };
 use std::hash::Hasher;
 use tokio::sync::oneshot;
 
 static BUFFER_SIZE: usize = 4096;
 
-async fn write<T: StreamMut<Item = i64> + Send + Unpin>(
+async fn write<T: Sink<Item = i64> + Send + Unpin>(
     mut sink: T,
     block: usize,
     count: usize,
@@ -18,7 +18,7 @@ async fn write<T: StreamMut<Item = i64> + Send + Unpin>(
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
         sink.grant(block).await.unwrap();
-        for value in &mut sink.stream_mut()[..block] {
+        for value in &mut sink.view_mut()[..block] {
             *value = rng.gen();
             hasher.write_i64(*value);
         }
@@ -27,7 +27,7 @@ async fn write<T: StreamMut<Item = i64> + Send + Unpin>(
     sender.send(hasher.finish()).unwrap();
 }
 
-async fn read<T: Stream<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
+async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     let mut closed = false;
@@ -36,17 +36,17 @@ async fn read<T: Stream<Item = i64> + Send + Unpin>(mut source: T, sender: onesh
         match source.grant(count).await {
             Err(Error::Closed) => {
                 closed = true;
-                assert!(source.stream().len() <= count);
+                assert!(source.view().len() <= count);
             }
             x => {
                 x.unwrap();
-                assert!(source.stream().len() >= count);
+                assert!(source.view().len() >= count);
             }
         }
-        for value in source.stream() {
+        for value in source.view() {
             hasher.write_i64(*value);
         }
-        let released = source.stream().len();
+        let released = source.view().len();
         source.release(released).await.unwrap();
     }
     sender.send(hasher.finish()).unwrap();
