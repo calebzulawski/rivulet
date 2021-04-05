@@ -40,7 +40,9 @@ where
             buf.len().min(self.0.view().len())
         };
         buf[..len].copy_from_slice(&self.0.view()[..len]);
-        self.0.blocking_release(len).map_err(crate::Error::into_io)?;
+        self.0
+            .blocking_release(len)
+            .map_err(crate::Error::into_io)?;
         Ok(len)
     }
 }
@@ -61,7 +63,7 @@ impl<S> AsyncReader<S>
 where
     S: Source<Item = u8> + Unpin,
 {
-    /// Create a new `Reader`
+    /// Create a new `AsyncReader`
     pub fn new(source: S) -> Self {
         Self { source, len: 0 }
     }
@@ -138,11 +140,80 @@ where
             buf.len().min(self.0.view().len())
         };
         self.0.view_mut()[..len].copy_from_slice(&buf[..len]);
-        self.0.blocking_release(len).map_err(crate::Error::into_io)?;
+        self.0
+            .blocking_release(len)
+            .map_err(crate::Error::into_io)?;
         Ok(len)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+/// Implements [`futures::io::AsyncWrite`] for a sink.
+#[pin_project]
+#[derive(Copy, Clone, Debug)]
+pub struct AsyncWriter<S>
+where
+    S: Sink<Item = u8> + Unpin,
+{
+    #[pin]
+    sink: S,
+    len: usize,
+}
+
+impl<S> AsyncWriter<S>
+where
+    S: Sink<Item = u8> + Unpin,
+{
+    /// Create a new `AsyncWriter`
+    pub fn new(sink: S) -> Self {
+        Self { sink, len: 0 }
+    }
+
+    /// Return the original `Sink`
+    pub fn into_inner(self) -> S {
+        self.sink
+    }
+}
+
+impl<S> futures::io::AsyncWrite for AsyncWriter<S>
+where
+    S: Sink<Item = u8> + Unpin,
+{
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        let mut pinned = self.project();
+        if *pinned.len == 0 {
+            *pinned.len = if buf.len() <= pinned.sink.view().len() {
+                buf.len()
+            } else {
+                futures::ready!(pinned
+                    .sink
+                    .as_mut()
+                    .poll_grant(cx, 1)
+                    .map_err(crate::Error::into_io))?;
+                buf.len().min(pinned.sink.view().len())
+            };
+            pinned.sink.view_mut()[..*pinned.len].copy_from_slice(&buf[..*pinned.len]);
+        }
+        pinned
+            .sink
+            .as_mut()
+            .poll_release(cx, *pinned.len)
+            .map_ok(|_| std::mem::take(pinned.len)) // set to 0
+            .map_err(crate::Error::into_io)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 }
