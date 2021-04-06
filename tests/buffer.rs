@@ -4,16 +4,10 @@ use rivulet::{
     Error, Sink, Source,
 };
 use std::hash::Hasher;
-use tokio::sync::oneshot;
 
 static BUFFER_SIZE: usize = 4096;
 
-async fn write<T: Sink<Item = i64> + Send + Unpin>(
-    mut sink: T,
-    block: usize,
-    count: usize,
-    sender: oneshot::Sender<u64>,
-) {
+async fn write<T: Sink<Item = i64> + Send + Unpin>(mut sink: T, block: usize, count: usize) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
@@ -24,10 +18,10 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(
         }
         sink.release(block).await.unwrap();
     }
-    sender.send(hasher.finish()).unwrap();
+    hasher.finish()
 }
 
-async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: oneshot::Sender<u64>) {
+async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     let mut closed = false;
@@ -49,20 +43,17 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T, sender: onesh
         let released = source.view().len();
         source.release(released).await.unwrap();
     }
-    sender.send(hasher.finish()).unwrap();
+    hasher.finish()
 }
 
 #[tokio::test]
 async fn spsc_buffer_integrity() {
     let (sink, source) = spsc::buffer::<i64>(BUFFER_SIZE);
 
-    let (write_send, write_recv) = oneshot::channel::<u64>();
-    let (read_send, read_recv) = oneshot::channel::<u64>();
+    let write_hash = tokio::spawn(write(sink, 500, 400));
+    let read_hash = tokio::spawn(read(source));
 
-    tokio::spawn(write(sink, 500, 400, write_send));
-    tokio::spawn(read(source, read_send));
-
-    let (write_hash, read_hash) = futures::future::join(write_recv, read_recv).await;
+    let (write_hash, read_hash) = futures::future::join(write_hash, read_hash).await;
     assert_eq!(write_hash.unwrap(), read_hash.unwrap());
 }
 
@@ -70,19 +61,14 @@ async fn spsc_buffer_integrity() {
 async fn spmc_buffer_integrity() {
     let (sink, source) = spmc::buffer::<i64>(BUFFER_SIZE);
 
-    let (write_send, write_recv) = oneshot::channel::<u64>();
-    tokio::spawn(write(sink, 500, 400, write_send));
-
-    let mut read_recv = Vec::new();
-    for _ in 0..10 {
-        let (send, recv) = oneshot::channel::<u64>();
-        tokio::spawn(read(source.clone(), send));
-        read_recv.push(recv);
-    }
+    let write_hash = tokio::spawn(write(sink, 500, 400));
+    let read_hashes = (0..10)
+        .map(|_| tokio::spawn(read(source.clone())))
+        .collect::<Vec<_>>();
     std::mem::drop(source); // remaining reference doesn't get used, so drop it
 
     let (write_hash, read_hashes) =
-        futures::future::join(write_recv, futures::future::join_all(read_recv)).await;
+        futures::future::join(write_hash, futures::future::join_all(read_hashes)).await;
     for read_hash in read_hashes {
         assert_eq!(write_hash.as_ref().unwrap(), read_hash.as_ref().unwrap());
     }
