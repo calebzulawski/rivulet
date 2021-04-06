@@ -1,6 +1,6 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{buffer::circular_buffer::spsc::buffer, Error};
-use std::hash::{Hash, Hasher};
+use rivulet::buffer::circular_buffer::spsc::buffer;
+use std::hash::Hash;
 
 #[tokio::test]
 async fn async_reader_writer() {

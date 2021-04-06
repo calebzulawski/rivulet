@@ -6,6 +6,16 @@ use std::marker::Unpin;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+macro_rules! try_closed {
+    { $r:expr } => {
+        match $r {
+            Ok(v) => v,
+            Err(crate::Error::Closed) => return Ok(0).into(),
+            Err(e) => return Err(e.into_io()).into(),
+        }
+    }
+}
+
 /// Implements [`std::io::Read`] for a source.
 #[pin_project]
 #[derive(Copy, Clone, Debug)]
@@ -36,13 +46,11 @@ where
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            self.0.blocking_grant(1).map_err(crate::Error::into_io)?;
+            try_closed!(self.0.blocking_grant(1));
             buf.len().min(self.0.view().len())
         };
         buf[..len].copy_from_slice(&self.0.view()[..len]);
-        self.0
-            .blocking_release(len)
-            .map_err(crate::Error::into_io)?;
+        try_closed!(self.0.blocking_release(len));
         Ok(len)
     }
 }
@@ -88,21 +96,16 @@ where
             *pinned.len = if buf.len() <= pinned.source.view().len() {
                 buf.len()
             } else {
-                futures::ready!(pinned
-                    .source
-                    .as_mut()
-                    .poll_grant(cx, 1)
-                    .map_err(crate::Error::into_io))?;
+                try_closed!(futures::ready!(pinned.source.as_mut().poll_grant(cx, 1)));
                 buf.len().min(pinned.source.view().len())
             };
             buf[..*pinned.len].copy_from_slice(&pinned.source.view()[..*pinned.len]);
         }
-        pinned
+        try_closed!(futures::ready!(pinned
             .source
             .as_mut()
-            .poll_release(cx, *pinned.len)
-            .map_ok(|_| std::mem::take(pinned.len)) // set to 0
-            .map_err(crate::Error::into_io)
+            .poll_release(cx, *pinned.len)));
+        Poll::Ready(Ok(std::mem::take(pinned.len))) // set len to 0
     }
 }
 
@@ -136,13 +139,11 @@ where
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            self.0.blocking_grant(1).map_err(crate::Error::into_io)?;
+            try_closed!(self.0.blocking_grant(1));
             buf.len().min(self.0.view().len())
         };
         self.0.view_mut()[..len].copy_from_slice(&buf[..len]);
-        self.0
-            .blocking_release(len)
-            .map_err(crate::Error::into_io)?;
+        try_closed!(self.0.blocking_release(len));
         Ok(len)
     }
 
@@ -192,21 +193,16 @@ where
             *pinned.len = if buf.len() <= pinned.sink.view().len() {
                 buf.len()
             } else {
-                futures::ready!(pinned
-                    .sink
-                    .as_mut()
-                    .poll_grant(cx, 1)
-                    .map_err(crate::Error::into_io))?;
+                try_closed!(futures::ready!(pinned.sink.as_mut().poll_grant(cx, 1)));
                 buf.len().min(pinned.sink.view().len())
             };
             pinned.sink.view_mut()[..*pinned.len].copy_from_slice(&buf[..*pinned.len]);
         }
-        pinned
+        try_closed!(futures::ready!(pinned
             .sink
             .as_mut()
-            .poll_release(cx, *pinned.len)
-            .map_ok(|_| std::mem::take(pinned.len)) // set to 0
-            .map_err(crate::Error::into_io)
+            .poll_release(cx, *pinned.len)));
+        Poll::Ready(Ok(std::mem::take(pinned.len))) // set to 0
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
