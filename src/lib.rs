@@ -4,10 +4,12 @@
 mod base;
 pub use base::*;
 
-#[cfg(feature = "buffer")]
-#[cfg_attr(docsrs, doc(cfg(feature = "buffer")))]
+pub mod error;
+
+#[cfg(all(feature = "std", feature = "buffer"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "std", feature = "buffer"))))]
 pub mod buffer;
 
-#[cfg(feature = "io")]
-#[cfg_attr(docsrs, doc(cfg(feature = "io")))]
+#[cfg(all(feature = "std", feature = "io"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "std", feature = "io"))))]
 pub mod io;

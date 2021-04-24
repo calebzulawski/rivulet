@@ -1,20 +1,12 @@
 //! Utilities for working with [`std::io`].
 
 use crate::{Sink, Source};
+use futures::io::{AsyncRead, AsyncWrite};
 use pin_project::pin_project;
+use std::io::{Read, Write};
 use std::marker::Unpin;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-
-macro_rules! try_closed {
-    { $r:expr } => {
-        match $r {
-            Ok(v) => v,
-            Err(crate::Error::Closed) => return Ok(0).into(),
-            Err(e) => return Err(e.into_io()).into(),
-        }
-    }
-}
 
 /// Implements [`std::io::Read`] for a source.
 #[pin_project]
@@ -38,24 +30,25 @@ where
     }
 }
 
-impl<S> std::io::Read for Reader<S>
+impl<S> Read for Reader<S>
 where
     S: Source<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            try_closed!(self.0.blocking_grant(1));
+            self.0.blocking_grant(1)?;
             buf.len().min(self.0.view().len())
         };
         buf[..len].copy_from_slice(&self.0.view()[..len]);
-        try_closed!(self.0.blocking_release(len));
+        self.0.blocking_release(len)?;
         Ok(len)
     }
 }
 
-/// Implements [`futures::io::AsyncRead`] for a source.
+/// Implements [`futures::io::AsyncRead`](`AsyncRead`) for a source.
 #[pin_project]
 #[derive(Copy, Clone, Debug)]
 pub struct AsyncReader<S>
@@ -82,9 +75,10 @@ where
     }
 }
 
-impl<S> futures::io::AsyncRead for AsyncReader<S>
+impl<S> AsyncRead for AsyncReader<S>
 where
     S: Source<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
 {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -96,15 +90,12 @@ where
             *pinned.len = if buf.len() <= pinned.source.view().len() {
                 buf.len()
             } else {
-                try_closed!(futures::ready!(pinned.source.as_mut().poll_grant(cx, 1)));
+                futures::ready!(pinned.source.as_mut().poll_grant(cx, 1))?;
                 buf.len().min(pinned.source.view().len())
             };
             buf[..*pinned.len].copy_from_slice(&pinned.source.view()[..*pinned.len]);
         }
-        try_closed!(futures::ready!(pinned
-            .source
-            .as_mut()
-            .poll_release(cx, *pinned.len)));
+        futures::ready!(pinned.source.as_mut().poll_release(cx, *pinned.len))?;
         Poll::Ready(Ok(std::mem::take(pinned.len))) // set len to 0
     }
 }
@@ -131,19 +122,20 @@ where
     }
 }
 
-impl<S> std::io::Write for Writer<S>
+impl<S> Write for Writer<S>
 where
     S: Sink<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
 {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
             buf.len()
         } else {
-            try_closed!(self.0.blocking_grant(1));
+            self.0.blocking_grant(1)?;
             buf.len().min(self.0.view().len())
         };
         self.0.view_mut()[..len].copy_from_slice(&buf[..len]);
-        try_closed!(self.0.blocking_release(len));
+        self.0.blocking_release(len)?;
         Ok(len)
     }
 
@@ -152,7 +144,7 @@ where
     }
 }
 
-/// Implements [`futures::io::AsyncWrite`] for a sink.
+/// Implements [`futures::io::AsyncWrite`](`AsyncWrite`) for a sink.
 #[pin_project]
 #[derive(Copy, Clone, Debug)]
 pub struct AsyncWriter<S>
@@ -179,9 +171,10 @@ where
     }
 }
 
-impl<S> futures::io::AsyncWrite for AsyncWriter<S>
+impl<S> AsyncWrite for AsyncWriter<S>
 where
     S: Sink<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
 {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -193,15 +186,12 @@ where
             *pinned.len = if buf.len() <= pinned.sink.view().len() {
                 buf.len()
             } else {
-                try_closed!(futures::ready!(pinned.sink.as_mut().poll_grant(cx, 1)));
+                futures::ready!(pinned.sink.as_mut().poll_grant(cx, 1))?;
                 buf.len().min(pinned.sink.view().len())
             };
             pinned.sink.view_mut()[..*pinned.len].copy_from_slice(&buf[..*pinned.len]);
         }
-        try_closed!(futures::ready!(pinned
-            .sink
-            .as_mut()
-            .poll_release(cx, *pinned.len)));
+        futures::ready!(pinned.sink.as_mut().poll_release(cx, *pinned.len))?;
         Poll::Ready(Ok(std::mem::take(pinned.len))) // set to 0
     }
 

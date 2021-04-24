@@ -10,7 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-default = ["io", "buffer"]
+default = ["std", "io", "buffer"]
+std = []
 io = []
 buffer = ["num-integer", "vmap"]
 

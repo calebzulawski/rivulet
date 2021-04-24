@@ -1,7 +1,7 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::{
     buffer::circular_buffer::{spmc, spsc},
-    Error, Sink, Source,
+    Sink, Source,
 };
 use std::hash::Hasher;
 
@@ -24,18 +24,11 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(mut sink: T, block: usize, co
 async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
-    let mut closed = false;
-    while !closed {
+    loop {
         let count = rng.gen_range(1, BUFFER_SIZE);
-        match source.grant(count).await {
-            Err(Error::Closed) => {
-                closed = true;
-                assert!(source.view().len() <= count);
-            }
-            x => {
-                x.unwrap();
-                assert!(source.view().len() >= count);
-            }
+        source.grant(count).await.unwrap();
+        if source.view().len() == 0 {
+            break hasher.finish();
         }
         for value in source.view() {
             hasher.write_i64(*value);
@@ -43,7 +36,6 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
         let released = source.view().len();
         source.release(released).await.unwrap();
     }
-    hasher.finish()
 }
 
 #[tokio::test]
