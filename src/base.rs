@@ -73,7 +73,7 @@ pub trait View {
     /// Attempt to advance past the first `count` elements in the current view.
     ///
     /// # Panics
-    /// If the request exceeds the current grant, this should function should panic.
+    /// If the request exceeds the current grant, this function should panic.
     fn poll_release(
         self: Pin<&mut Self>,
         cx: &mut Context,
