@@ -1,9 +1,9 @@
 //! Utilities for working with [`std::io`].
 
 use crate::{Sink, Source};
-use futures::io::{AsyncRead, AsyncWrite};
+use futures::io::{AsyncBufRead, AsyncRead, AsyncWrite};
 use pin_project::pin_project;
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::marker::Unpin;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -45,6 +45,21 @@ where
         buf[..len].copy_from_slice(&self.0.view()[..len]);
         self.0.blocking_release(len)?;
         Ok(len)
+    }
+}
+
+impl<S> BufRead for Reader<S>
+where
+    S: Source<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+{
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.0.blocking_grant(1)?;
+        Ok(self.0.view())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.0.blocking_release(amt).unwrap();
     }
 }
 
@@ -97,6 +112,26 @@ where
         }
         futures::ready!(pinned.source.as_mut().poll_release(cx, *pinned.len))?;
         Poll::Ready(Ok(std::mem::take(pinned.len))) // set len to 0
+    }
+}
+
+impl<S> AsyncBufRead for AsyncReader<S>
+where
+    S: Source<Item = u8> + Unpin,
+    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+{
+    fn poll_fill_buf<'a>(
+        self: Pin<&'a mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<&'a [u8]>> {
+        let mut pinned = self.project();
+        futures::ready!(pinned.source.as_mut().poll_grant(cx, 1))?;
+        Poll::Ready(Ok(Pin::into_inner(pinned.source).view()))
+    }
+
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        let mut pinned = self.project();
+        pinned.source.as_mut().blocking_release(amt).unwrap();
     }
 }
 
