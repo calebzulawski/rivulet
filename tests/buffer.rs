@@ -27,7 +27,7 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
     loop {
         let count = rng.gen_range(1, BUFFER_SIZE);
         source.grant(count).await.unwrap();
-        if source.view().len() == 0 {
+        if source.view().is_empty() {
             break hasher.finish();
         }
         for value in source.view() {

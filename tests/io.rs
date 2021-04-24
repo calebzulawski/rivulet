@@ -1,6 +1,6 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::buffer::circular_buffer::spsc::buffer;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 
 #[tokio::test]
 async fn async_reader_writer() {
@@ -14,13 +14,17 @@ async fn async_reader_writer() {
         let mut rng = SmallRng::from_entropy();
         let values: Vec<u8> = (0..1_000_000).map(|_| rng.gen()).collect();
         write.write_all(&values).await.unwrap();
-        values.hash(&mut seahash::SeaHasher::new());
+        let mut hasher = seahash::SeaHasher::new();
+        values.hash(&mut hasher);
+        hasher.finish()
     });
 
     let received = tokio::spawn(async move {
         let mut values = Vec::new();
         read.read_to_end(&mut values).await.unwrap();
-        values.hash(&mut seahash::SeaHasher::new())
+        let mut hasher = seahash::SeaHasher::new();
+        values.hash(&mut hasher);
+        hasher.finish()
     });
 
     let (sent, received) = futures::future::join(sent, received).await;
@@ -39,13 +43,17 @@ fn sync_reader_writer() {
         let mut rng = SmallRng::from_entropy();
         let values: Vec<u8> = (0..1_000_000).map(|_| rng.gen()).collect();
         write.write_all(&values).unwrap();
-        values.hash(&mut seahash::SeaHasher::new());
+        let mut hasher = seahash::SeaHasher::new();
+        values.hash(&mut hasher);
+        hasher.finish()
     });
 
     let received = std::thread::spawn(move || {
         let mut values = Vec::new();
         read.read_to_end(&mut values).unwrap();
-        values.hash(&mut seahash::SeaHasher::new())
+        let mut hasher = seahash::SeaHasher::new();
+        values.hash(&mut hasher);
+        hasher.finish()
     });
 
     let sent = sent.join().unwrap();
