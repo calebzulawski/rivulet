@@ -48,7 +48,7 @@ where
     }
 }
 
-/// Implements [`futures::io::AsyncRead`](`AsyncRead`) for a source.
+/// Implements `futures::io::AsyncRead` for a source.
 #[pin_project]
 #[derive(Copy, Clone, Debug)]
 pub struct AsyncReader<S>
@@ -144,7 +144,7 @@ where
     }
 }
 
-/// Implements [`futures::io::AsyncWrite`](`AsyncWrite`) for a sink.
+/// Implements `futures::io::AsyncWrite` for a sink.
 #[pin_project]
 #[derive(Copy, Clone, Debug)]
 pub struct AsyncWriter<S>

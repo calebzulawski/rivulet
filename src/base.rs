@@ -1,11 +1,11 @@
 //! Traits defining common stream interfaces.
 
-use pin_project::pin_project;
 use core::{
-future::Future,
-pin::Pin,
-task::{Context, Poll},
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
 };
+use pin_project::pin_project;
 
 macro_rules! future {
     { $(#[$attr:meta])* $type:ident => $poll:ident => $error:ident} => {
