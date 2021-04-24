@@ -183,12 +183,12 @@
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Traits defining common stream interfaces.</span>
 
-<span class="kw">use</span> <span class="ident">pin_project::pin_project</span>;
 <span class="kw">use</span> <span class="ident">core</span>::{
-<span class="ident">future::Future</span>,
-<span class="ident">pin::Pin</span>,
-<span class="ident">task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>},
+    <span class="ident">future::Future</span>,
+    <span class="ident">pin::Pin</span>,
+    <span class="ident">task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>},
 };
+<span class="kw">use</span> <span class="ident">pin_project::pin_project</span>;
 
 <span class="macro">macro_rules!</span> <span class="ident">future</span> {
     { $(<span class="attribute">#[<span class="macro-nonterminal">$</span><span class="macro-nonterminal">attr</span>:<span class="ident">meta</span>]</span>)<span class="op">*</span> <span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ident</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">poll</span>:<span class="ident">ident</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">error</span>:<span class="ident">ident</span>} <span class="op">=</span><span class="op">&gt;</span> {
