@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Infallible","Error used when a grant or release will never fail."]],"struct":[["GrantOverflow","Error produced when a request is too large to grant."]]});

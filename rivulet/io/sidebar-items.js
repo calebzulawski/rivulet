@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["AsyncReader","Implements [`futures::io::AsyncRead`] for a source."],["AsyncWriter","Implements [`futures::io::AsyncWrite`] for a sink."],["Reader","Implements [`std::io::Read`] for a source."],["Writer","Implements [`std::io::Write`] for a sink."]]});
+initSidebarItems({"struct":[["AsyncReader","Implements `futures::io::AsyncRead` for a source."],["AsyncWriter","Implements `futures::io::AsyncWrite` for a sink."],["Reader","Implements [`std::io::Read`] for a source."],["Writer","Implements [`std::io::Write`] for a sink."]]});
