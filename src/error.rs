@@ -4,8 +4,8 @@
 #[derive(Copy, Clone, Debug)]
 pub enum Infallible {}
 
-impl std::fmt::Display for Infallible {
-    fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for Infallible {
+    fn fmt(&self, _: &mut core::fmt::Formatter) -> core::fmt::Result {
         unreachable!()
     }
 }
@@ -18,13 +18,13 @@ impl std::error::Error for Infallible {
 }
 
 #[cfg(feature = "std")]
-impl std::convert::From<Infallible> for std::io::Error {
+impl core::convert::From<Infallible> for std::io::Error {
     fn from(_: Infallible) -> Self {
         unreachable!()
     }
 }
 
-impl std::convert::From<Infallible> for GrantOverflow {
+impl core::convert::From<Infallible> for GrantOverflow {
     fn from(_: Infallible) -> Self {
         unreachable!()
     }
@@ -36,8 +36,8 @@ impl std::convert::From<Infallible> for GrantOverflow {
 #[derive(Copy, Clone, Debug)]
 pub struct GrantOverflow(pub usize);
 
-impl std::fmt::Display for GrantOverflow {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+impl core::fmt::Display for GrantOverflow {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
         write!(f, "request exceeded maximum possible grant of `{}`", self.0)
     }
 }

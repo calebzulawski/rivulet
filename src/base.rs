@@ -1,9 +1,11 @@
 //! Traits defining common stream interfaces.
 
 use pin_project::pin_project;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use core::{
+future::Future,
+pin::Pin,
+task::{Context, Poll},
+};
 
 macro_rules! future {
     { $(#[$attr:meta])* $type:ident => $poll:ident => $error:ident} => {
@@ -54,6 +56,9 @@ pub trait View {
     ///
     /// This view is obtained by successfully polling [`poll_grant`](`Self::poll_grant`) and
     /// advanced by successfully polling [`poll_release`](`Self::poll_release`).
+    ///
+    /// If this slice is smaller than the latest requested size, the end of the stream has been
+    /// reached and no additional values will be provided.
     fn view(&self) -> &[Self::Item];
 
     /// Attempt to obtain a view of at least `count` elements.
