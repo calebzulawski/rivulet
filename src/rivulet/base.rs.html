@@ -132,54 +132,6 @@
 <span id="129">129</span>
 <span id="130">130</span>
 <span id="131">131</span>
-<span id="132">132</span>
-<span id="133">133</span>
-<span id="134">134</span>
-<span id="135">135</span>
-<span id="136">136</span>
-<span id="137">137</span>
-<span id="138">138</span>
-<span id="139">139</span>
-<span id="140">140</span>
-<span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
-<span id="151">151</span>
-<span id="152">152</span>
-<span id="153">153</span>
-<span id="154">154</span>
-<span id="155">155</span>
-<span id="156">156</span>
-<span id="157">157</span>
-<span id="158">158</span>
-<span id="159">159</span>
-<span id="160">160</span>
-<span id="161">161</span>
-<span id="162">162</span>
-<span id="163">163</span>
-<span id="164">164</span>
-<span id="165">165</span>
-<span id="166">166</span>
-<span id="167">167</span>
-<span id="168">168</span>
-<span id="169">169</span>
-<span id="170">170</span>
-<span id="171">171</span>
-<span id="172">172</span>
-<span id="173">173</span>
-<span id="174">174</span>
-<span id="175">175</span>
-<span id="176">176</span>
-<span id="177">177</span>
-<span id="178">178</span>
-<span id="179">179</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Traits defining common stream interfaces.</span>
 
@@ -190,38 +142,25 @@
 };
 <span class="kw">use</span> <span class="ident">pin_project::pin_project</span>;
 
-<span class="macro">macro_rules!</span> <span class="ident">future</span> {
-    { $(<span class="attribute">#[<span class="macro-nonterminal">$</span><span class="macro-nonterminal">attr</span>:<span class="ident">meta</span>]</span>)<span class="op">*</span> <span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ident</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">poll</span>:<span class="ident">ident</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">error</span>:<span class="ident">ident</span>} <span class="op">=</span><span class="op">&gt;</span> {
-        $(<span class="attribute">#[<span class="macro-nonterminal">$</span><span class="macro-nonterminal">attr</span>]</span>)<span class="op">*</span>
-        <span class="attribute">#[<span class="ident">pin_project</span>]</span>
-        <span class="kw">pub</span> <span class="kw">struct</span> <span class="macro-nonterminal">$</span><span class="kw">type</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="macro-nonterminal">T</span><span class="op">&gt;</span> {
-            <span class="attribute">#[<span class="ident">pin</span>]</span>
-            <span class="ident">handle</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">T</span>,
-            <span class="ident">count</span>: <span class="ident">usize</span>,
-        }
+<span class="doccomment">/// Future produced by [`View::grant`].</span>
+<span class="attribute">#[<span class="ident">pin_project</span>]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span> {
+    <span class="attribute">#[<span class="ident">pin</span>]</span>
+    <span class="ident">handle</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">T</span>,
+    <span class="ident">count</span>: <span class="ident">usize</span>,
+}
 
-        <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Future</span> <span class="kw">for</span> <span class="macro-nonterminal">$</span><span class="kw">type</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="macro-nonterminal">T</span><span class="op">&gt;</span>
-        <span class="kw">where</span>
-            <span class="ident">T</span>: <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-        {
-            <span class="kw">type</span> <span class="ident">Output</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">T</span>::<span class="macro-nonterminal">$</span><span class="macro-nonterminal">error</span><span class="op">&gt;</span>;
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Future</span> <span class="kw">for</span> <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+{
+    <span class="kw">type</span> <span class="ident">Output</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">T::Error</span><span class="op">&gt;</span>;
 
-            <span class="kw">fn</span> <span class="ident">poll</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="self">Self</span><span class="ident">::Output</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">count</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>;
-                <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-                <span class="ident">pinned</span>.<span class="ident">handle</span>.<span class="macro-nonterminal">$</span><span class="macro-nonterminal">poll</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
-            }
-        }
+    <span class="kw">fn</span> <span class="ident">poll</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="self">Self</span><span class="ident">::Output</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">count</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>;
+        <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
+        <span class="ident">pinned</span>.<span class="ident">handle</span>.<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
     }
-}
-
-<span class="macro">future!</span> {
-    <span class="doccomment">/// Future produced by [`View::grant`].</span>
-    <span class="ident">Grant</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_grant</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">GrantError</span>
-}
-<span class="macro">future!</span> {
-    <span class="doccomment">/// Future produced by [`View::release`].</span>
-    <span class="ident">Release</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">poll_release</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">ReleaseError</span>
 }
 
 <span class="doccomment">/// Obtain views into asynchronous contiguous-memory streams.</span>
@@ -230,17 +169,14 @@
     <span class="kw">type</span> <span class="ident">Item</span>;
 
     <span class="doccomment">/// The error produced by [`poll_grant`](`Self::poll_grant`).</span>
-    <span class="kw">type</span> <span class="ident">GrantError</span>: <span class="ident">core::fmt::Debug</span>;
-
-    <span class="doccomment">/// The error produced by [`poll_release`](`Self::poll_release`).</span>
-    <span class="kw">type</span> <span class="ident">ReleaseError</span>: <span class="ident">core::fmt::Debug</span>;
+    <span class="kw">type</span> <span class="ident">Error</span>: <span class="ident">core::fmt::Debug</span>;
 
     <span class="doccomment">/// Obtain the current view of the stream.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// This view is obtained by successfully polling [`poll_grant`](`Self::poll_grant`) and</span>
     <span class="doccomment">/// advanced by successfully polling [`poll_release`](`Self::poll_release`).</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// If this slice is smaller than the latest requested size, the end of the stream has been</span>
+    <span class="doccomment">/// If this slice is smaller than last successful grant request, the end of the stream has been</span>
     <span class="doccomment">/// reached and no additional values will be provided.</span>
     <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>];
 
@@ -251,17 +187,13 @@
         <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
         <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
         <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::GrantError</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::Error</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
     <span class="doccomment">/// Attempt to advance past the first `count` elements in the current view.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Panics</span>
     <span class="doccomment">/// If the request exceeds the current grant, this function should panic.</span>
-    <span class="kw">fn</span> <span class="ident">poll_release</span>(
-        <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-        <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-        <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::ReleaseError</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>);
 
     <span class="doccomment">/// Create a future that obtains a view of at least `count` elements.</span>
     <span class="doccomment">///</span>
@@ -276,44 +208,20 @@
         }
     }
 
-    <span class="doccomment">/// Create a future that advances past the first `count` elements in the current view.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// See [`poll_release`](`Self::poll_release`).</span>
-    <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Release</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    {
-        <span class="ident">Release</span> {
-            <span class="ident">handle</span>: <span class="self">self</span>,
-            <span class="ident">count</span>,
-        }
-    }
-
     <span class="doccomment">/// Obtains a view of at least `count` elements, blocking the current thread.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// See [`poll_grant`](`View::poll_grant`).</span>
-    <span class="kw">fn</span> <span class="ident">blocking_grant</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::GrantError</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">blocking_grant</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::Error</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
     {
         <span class="ident">futures::executor::block_on</span>(<span class="self">self</span>.<span class="ident">grant</span>(<span class="ident">count</span>))
     }
-
-    <span class="doccomment">/// Advances past the first `count` elements in the current view, blocking the current thread.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// See [`poll_release`](`View::poll_release`).</span>
-    <span class="kw">fn</span> <span class="ident">blocking_release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::ReleaseError</span><span class="op">&gt;</span>
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    {
-        <span class="ident">futures::executor::block_on</span>(<span class="self">self</span>.<span class="ident">release</span>(<span class="ident">count</span>))
-    }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="question-mark">?</span><span class="ident">Sized</span> <span class="op">+</span> <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">S</span> {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">S::Item</span>;
-    <span class="kw">type</span> <span class="ident">GrantError</span> <span class="op">=</span> <span class="ident">S::GrantError</span>;
-    <span class="kw">type</span> <span class="ident">ReleaseError</span> <span class="op">=</span> <span class="ident">S::ReleaseError</span>;
+    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">S::Error</span>;
 
     <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>] {
         <span class="ident">View::view</span>(<span class="kw-2">*</span><span class="self">self</span>)
@@ -323,16 +231,12 @@
         <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
         <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
         <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::GrantError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="ident">S::poll_grant</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>), <span class="ident">cx</span>, <span class="ident">count</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">poll_release</span>(
-        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-        <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-        <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="self">Self</span><span class="ident">::ReleaseError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="ident">S::poll_release</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="kw-2">*</span><span class="self">self</span>), <span class="ident">cx</span>, <span class="ident">count</span>)
+    <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+        <span class="ident">S::release</span>(<span class="self">self</span>, <span class="ident">count</span>)
     }
 }
 

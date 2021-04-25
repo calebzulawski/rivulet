@@ -542,45 +542,9 @@
 <span id="539">539</span>
 <span id="540">540</span>
 <span id="541">541</span>
-<span id="542">542</span>
-<span id="543">543</span>
-<span id="544">544</span>
-<span id="545">545</span>
-<span id="546">546</span>
-<span id="547">547</span>
-<span id="548">548</span>
-<span id="549">549</span>
-<span id="550">550</span>
-<span id="551">551</span>
-<span id="552">552</span>
-<span id="553">553</span>
-<span id="554">554</span>
-<span id="555">555</span>
-<span id="556">556</span>
-<span id="557">557</span>
-<span id="558">558</span>
-<span id="559">559</span>
-<span id="560">560</span>
-<span id="561">561</span>
-<span id="562">562</span>
-<span id="563">563</span>
-<span id="564">564</span>
-<span id="565">565</span>
-<span id="566">566</span>
-<span id="567">567</span>
-<span id="568">568</span>
-<span id="569">569</span>
-<span id="570">570</span>
-<span id="571">571</span>
-<span id="572">572</span>
-<span id="573">573</span>
-<span id="574">574</span>
-<span id="575">575</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::{
-    <span class="ident">buffer::unsafe_circular_buffer::UnsafeCircularBuffer</span>,
-    <span class="ident">error</span>::{<span class="ident">GrantOverflow</span>, <span class="ident">Infallible</span>},
-    <span class="ident">View</span>, <span class="ident">ViewMut</span>,
+    <span class="ident">buffer::unsafe_circular_buffer::UnsafeCircularBuffer</span>, <span class="ident">error::GrantOverflow</span>, <span class="ident">View</span>, <span class="ident">ViewMut</span>,
 };
 <span class="kw">use</span> <span class="ident">futures::task::AtomicWaker</span>;
 <span class="kw">use</span> <span class="ident">pin_project::pin_project</span>;
@@ -764,13 +728,9 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">poll_release_impl</span>(
-        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-        <span class="kw">_</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-        <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">release_impl</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
         <span class="kw">if</span> <span class="ident">count</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-            <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(()));
+            <span class="kw">return</span>;
         }
 
         <span class="macro">assert!</span>(
@@ -783,8 +743,6 @@
         <span class="self">self</span>.<span class="ident">available</span> <span class="op">-</span><span class="op">=</span> <span class="ident">count</span>;
         <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">tail</span>.<span class="ident">store</span>(<span class="self">self</span>.<span class="ident">tail</span>, <span class="ident">Ordering::Relaxed</span>);
         <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">readers</span>.<span class="ident">wake</span>();
-
-        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(()))
     }
 }
 
@@ -878,11 +836,11 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">poll_release_impl</span>(
-        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-        <span class="kw">_</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-        <span class="ident">count</span>: <span class="ident">usize</span>,
-    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">release_impl</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+        <span class="kw">if</span> <span class="ident">count</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+            <span class="kw">return</span>;
+        }
+
         <span class="macro">assert!</span>(
             <span class="ident">count</span> <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">available</span>,
             <span class="string">&quot;attempted to release more than current grant&quot;</span>
@@ -893,8 +851,6 @@
         <span class="self">self</span>.<span class="ident">available</span> <span class="op">-</span><span class="op">=</span> <span class="ident">count</span>;
         <span class="self">self</span>.<span class="ident">reader</span>.<span class="ident">head</span>.<span class="ident">store</span>(<span class="self">self</span>.<span class="ident">head</span>, <span class="ident">Ordering::Relaxed</span>);
         <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">write_waker</span>.<span class="ident">wake</span>();
-
-        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(()))
     }
 }
 
@@ -964,8 +920,7 @@
 
     <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span>;
-        <span class="kw">type</span> <span class="ident">GrantError</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
-        <span class="kw">type</span> <span class="ident">ReleaseError</span> <span class="op">=</span> <span class="ident">Infallible</span>;
+        <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
 
         <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>] {
             <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view_impl</span>()
@@ -980,13 +935,8 @@
             <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_grant_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
         }
 
-        <span class="kw">fn</span> <span class="ident">poll_release</span>(
-            <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-            <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-            <span class="ident">count</span>: <span class="ident">usize</span>,
-        ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-            <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_release_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
+        <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+            <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release_impl</span>(<span class="ident">count</span>)
         }
     }
 
@@ -998,8 +948,7 @@
 
     <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span>;
-        <span class="kw">type</span> <span class="ident">GrantError</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
-        <span class="kw">type</span> <span class="ident">ReleaseError</span> <span class="op">=</span> <span class="ident">Infallible</span>;
+        <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
 
         <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>] {
             <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view_impl</span>()
@@ -1014,13 +963,8 @@
             <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_grant_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
         }
 
-        <span class="kw">fn</span> <span class="ident">poll_release</span>(
-            <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-            <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-            <span class="ident">count</span>: <span class="ident">usize</span>,
-        ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-            <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_release_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
+        <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+            <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release_impl</span>(<span class="ident">count</span>)
         }
     }
 
@@ -1083,8 +1027,7 @@
 
     <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span>;
-        <span class="kw">type</span> <span class="ident">GrantError</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
-        <span class="kw">type</span> <span class="ident">ReleaseError</span> <span class="op">=</span> <span class="ident">Infallible</span>;
+        <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
 
         <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>] {
             <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view_impl</span>()
@@ -1099,13 +1042,8 @@
             <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_grant_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
         }
 
-        <span class="kw">fn</span> <span class="ident">poll_release</span>(
-            <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-            <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-            <span class="ident">count</span>: <span class="ident">usize</span>,
-        ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-            <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_release_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
+        <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+            <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release_impl</span>(<span class="ident">count</span>)
         }
     }
 
@@ -1117,8 +1055,7 @@
 
     <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span>;
-        <span class="kw">type</span> <span class="ident">GrantError</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
-        <span class="kw">type</span> <span class="ident">ReleaseError</span> <span class="op">=</span> <span class="ident">Infallible</span>;
+        <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">GrantOverflow</span>;
 
         <span class="kw">fn</span> <span class="ident">view</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="self">Self</span><span class="ident">::Item</span>] {
             <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view_impl</span>()
@@ -1133,13 +1070,8 @@
             <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_grant_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
         }
 
-        <span class="kw">fn</span> <span class="ident">poll_release</span>(
-            <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
-            <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Context</span>,
-            <span class="ident">count</span>: <span class="ident">usize</span>,
-        ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Infallible</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-            <span class="ident">pinned</span>.<span class="number">0</span>.<span class="ident">poll_release_impl</span>(<span class="ident">cx</span>, <span class="ident">count</span>)
+        <span class="kw">fn</span> <span class="ident">release</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) {
+            <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release_impl</span>(<span class="ident">count</span>)
         }
     }
 

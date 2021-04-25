@@ -1,3 +1,0 @@
-(function() {var implementors = {};
-implementors["rivulet"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"enum\" href=\"rivulet/error/enum.Infallible.html\" title=\"enum rivulet::error::Infallible\">Infallible</a>&gt; for <a class=\"struct\" href=\"rivulet/error/struct.GrantOverflow.html\" title=\"struct rivulet::error::GrantOverflow\">GrantOverflow</a>","synthetic":false,"types":["rivulet::error::GrantOverflow"]}];
-if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

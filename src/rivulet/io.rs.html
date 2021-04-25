@@ -277,7 +277,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Read</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">buf</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> [<span class="ident">u8</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
@@ -287,7 +287,7 @@
             <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>())
         };
         <span class="ident">buf</span>[..<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>()[..<span class="ident">len</span>]);
-        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">blocking_release</span>(<span class="ident">len</span>)<span class="question-mark">?</span>;
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release</span>(<span class="ident">len</span>);
         <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
     }
 }
@@ -295,7 +295,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">BufRead</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">fill_buf</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">blocking_grant</span>(<span class="number">1</span>)<span class="question-mark">?</span>;
@@ -303,7 +303,7 @@
     }
 
     <span class="kw">fn</span> <span class="ident">consume</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">amt</span>: <span class="ident">usize</span>) {
-        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">blocking_release</span>(<span class="ident">amt</span>).<span class="ident">unwrap</span>();
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release</span>(<span class="ident">amt</span>);
     }
 }
 
@@ -337,7 +337,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_read</span>(
         <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
@@ -354,7 +354,7 @@
             };
             <span class="ident">buf</span>[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">view</span>()[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>]);
         }
-        <span class="macro">futures::ready!</span>(<span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">poll_release</span>(<span class="ident">cx</span>, <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>))<span class="question-mark">?</span>;
+        <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>);
         <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="ident">pinned</span>.<span class="ident">len</span>))) <span class="comment">// set len to 0</span>
     }
 }
@@ -362,7 +362,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncBufRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_fill_buf</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
@@ -375,7 +375,7 @@
 
     <span class="kw">fn</span> <span class="ident">consume</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">amt</span>: <span class="ident">usize</span>) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-        <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">blocking_release</span>(<span class="ident">amt</span>).<span class="ident">unwrap</span>();
+        <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="ident">amt</span>);
     }
 }
 
@@ -404,7 +404,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Write</span> <span class="kw">for</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">write</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">buf</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
@@ -414,7 +414,7 @@
             <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>())
         };
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view_mut</span>()[..<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>[..<span class="ident">len</span>]);
-        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">blocking_release</span>(<span class="ident">len</span>)<span class="question-mark">?</span>;
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">release</span>(<span class="ident">len</span>);
         <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
     }
 
@@ -453,7 +453,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncWrite</span> <span class="kw">for</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::GrantError</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::ReleaseError</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_write</span>(
         <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
@@ -470,7 +470,7 @@
             };
             <span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">view_mut</span>()[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>]);
         }
-        <span class="macro">futures::ready!</span>(<span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">as_mut</span>().<span class="ident">poll_release</span>(<span class="ident">cx</span>, <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>))<span class="question-mark">?</span>;
+        <span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>);
         <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="ident">pinned</span>.<span class="ident">len</span>))) <span class="comment">// set to 0</span>
     }
 
