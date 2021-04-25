@@ -7,38 +7,25 @@ use core::{
 };
 use pin_project::pin_project;
 
-macro_rules! future {
-    { $(#[$attr:meta])* $type:ident => $poll:ident => $error:ident} => {
-        $(#[$attr])*
-        #[pin_project]
-        pub struct $type<'a, T> {
-            #[pin]
-            handle: &'a mut T,
-            count: usize,
-        }
+/// Future produced by [`View::grant`].
+#[pin_project]
+pub struct Grant<'a, T> {
+    #[pin]
+    handle: &'a mut T,
+    count: usize,
+}
 
-        impl<'a, T> Future for $type<'a, T>
-        where
-            T: View + Unpin,
-        {
-            type Output = Result<(), T::$error>;
+impl<'a, T> Future for Grant<'a, T>
+where
+    T: View + Unpin,
+{
+    type Output = Result<(), T::Error>;
 
-            fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-                let count = self.count;
-                let pinned = self.project();
-                pinned.handle.$poll(cx, count)
-            }
-        }
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        let count = self.count;
+        let pinned = self.project();
+        pinned.handle.poll_grant(cx, count)
     }
-}
-
-future! {
-    /// Future produced by [`View::grant`].
-    Grant => poll_grant => GrantError
-}
-future! {
-    /// Future produced by [`View::release`].
-    Release => poll_release => ReleaseError
 }
 
 /// Obtain views into asynchronous contiguous-memory streams.
@@ -47,17 +34,14 @@ pub trait View {
     type Item;
 
     /// The error produced by [`poll_grant`](`Self::poll_grant`).
-    type GrantError: core::fmt::Debug;
-
-    /// The error produced by [`poll_release`](`Self::poll_release`).
-    type ReleaseError: core::fmt::Debug;
+    type Error: core::fmt::Debug;
 
     /// Obtain the current view of the stream.
     ///
     /// This view is obtained by successfully polling [`poll_grant`](`Self::poll_grant`) and
     /// advanced by successfully polling [`poll_release`](`Self::poll_release`).
     ///
-    /// If this slice is smaller than the latest requested size, the end of the stream has been
+    /// If this slice is smaller than last successful grant request, the end of the stream has been
     /// reached and no additional values will be provided.
     fn view(&self) -> &[Self::Item];
 
@@ -68,17 +52,13 @@ pub trait View {
         self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
-    ) -> Poll<Result<(), Self::GrantError>>;
+    ) -> Poll<Result<(), Self::Error>>;
 
     /// Attempt to advance past the first `count` elements in the current view.
     ///
     /// # Panics
     /// If the request exceeds the current grant, this function should panic.
-    fn poll_release(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Self::ReleaseError>>;
+    fn release(&mut self, count: usize);
 
     /// Create a future that obtains a view of at least `count` elements.
     ///
@@ -93,44 +73,20 @@ pub trait View {
         }
     }
 
-    /// Create a future that advances past the first `count` elements in the current view.
-    ///
-    /// See [`poll_release`](`Self::poll_release`).
-    fn release(&mut self, count: usize) -> Release<'_, Self>
-    where
-        Self: Sized + Unpin,
-    {
-        Release {
-            handle: self,
-            count,
-        }
-    }
-
     /// Obtains a view of at least `count` elements, blocking the current thread.
     ///
     /// See [`poll_grant`](`View::poll_grant`).
-    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::GrantError>
+    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::Error>
     where
         Self: Sized + Unpin,
     {
         futures::executor::block_on(self.grant(count))
     }
-
-    /// Advances past the first `count` elements in the current view, blocking the current thread.
-    ///
-    /// See [`poll_release`](`View::poll_release`).
-    fn blocking_release(&mut self, count: usize) -> Result<(), Self::ReleaseError>
-    where
-        Self: Sized + Unpin,
-    {
-        futures::executor::block_on(self.release(count))
-    }
 }
 
 impl<S: ?Sized + View + Unpin> View for &mut S {
     type Item = S::Item;
-    type GrantError = S::GrantError;
-    type ReleaseError = S::ReleaseError;
+    type Error = S::Error;
 
     fn view(&self) -> &[Self::Item] {
         View::view(*self)
@@ -140,16 +96,12 @@ impl<S: ?Sized + View + Unpin> View for &mut S {
         mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
-    ) -> Poll<Result<(), Self::GrantError>> {
+    ) -> Poll<Result<(), Self::Error>> {
         S::poll_grant(Pin::new(&mut **self), cx, count)
     }
 
-    fn poll_release(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Self::ReleaseError>> {
-        S::poll_release(Pin::new(&mut **self), cx, count)
+    fn release(&mut self, count: usize) {
+        S::release(self, count)
     }
 }
 

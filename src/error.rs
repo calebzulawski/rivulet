@@ -1,35 +1,5 @@
 //! Errors produced by streams.
 
-/// Error used when a grant or release will never fail.
-#[derive(Copy, Clone, Debug)]
-pub enum Infallible {}
-
-impl core::fmt::Display for Infallible {
-    fn fmt(&self, _: &mut core::fmt::Formatter) -> core::fmt::Result {
-        unreachable!()
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Infallible {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        unreachable!()
-    }
-}
-
-#[cfg(feature = "std")]
-impl core::convert::From<Infallible> for std::io::Error {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
-    }
-}
-
-impl core::convert::From<Infallible> for GrantOverflow {
-    fn from(_: Infallible) -> Self {
-        unreachable!()
-    }
-}
-
 /// Error produced when a request is too large to grant.
 ///
 /// Contains the maximum allowable grant.

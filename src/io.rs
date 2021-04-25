@@ -33,7 +33,7 @@ where
 impl<S> Read for Reader<S>
 where
     S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
@@ -43,7 +43,7 @@ where
             buf.len().min(self.0.view().len())
         };
         buf[..len].copy_from_slice(&self.0.view()[..len]);
-        self.0.blocking_release(len)?;
+        self.0.release(len);
         Ok(len)
     }
 }
@@ -51,7 +51,7 @@ where
 impl<S> BufRead for Reader<S>
 where
     S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.0.blocking_grant(1)?;
@@ -59,7 +59,7 @@ where
     }
 
     fn consume(&mut self, amt: usize) {
-        self.0.blocking_release(amt).unwrap();
+        self.0.release(amt);
     }
 }
 
@@ -93,7 +93,7 @@ where
 impl<S> AsyncRead for AsyncReader<S>
 where
     S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -110,7 +110,7 @@ where
             };
             buf[..*pinned.len].copy_from_slice(&pinned.source.view()[..*pinned.len]);
         }
-        futures::ready!(pinned.source.as_mut().poll_release(cx, *pinned.len))?;
+        pinned.source.as_mut().release(*pinned.len);
         Poll::Ready(Ok(std::mem::take(pinned.len))) // set len to 0
     }
 }
@@ -118,7 +118,7 @@ where
 impl<S> AsyncBufRead for AsyncReader<S>
 where
     S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn poll_fill_buf<'a>(
         self: Pin<&'a mut Self>,
@@ -131,7 +131,7 @@ where
 
     fn consume(self: Pin<&mut Self>, amt: usize) {
         let mut pinned = self.project();
-        pinned.source.as_mut().blocking_release(amt).unwrap();
+        pinned.source.as_mut().release(amt);
     }
 }
 
@@ -160,7 +160,7 @@ where
 impl<S> Write for Writer<S>
 where
     S: Sink<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
@@ -170,7 +170,7 @@ where
             buf.len().min(self.0.view().len())
         };
         self.0.view_mut()[..len].copy_from_slice(&buf[..len]);
-        self.0.blocking_release(len)?;
+        self.0.release(len);
         Ok(len)
     }
 
@@ -209,7 +209,7 @@ where
 impl<S> AsyncWrite for AsyncWriter<S>
 where
     S: Sink<Item = u8> + Unpin,
-    std::io::Error: From<S::GrantError> + From<S::ReleaseError>,
+    std::io::Error: From<S::Error>,
 {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -226,7 +226,7 @@ where
             };
             pinned.sink.view_mut()[..*pinned.len].copy_from_slice(&buf[..*pinned.len]);
         }
-        futures::ready!(pinned.sink.as_mut().poll_release(cx, *pinned.len))?;
+        pinned.sink.as_mut().release(*pinned.len);
         Poll::Ready(Ok(std::mem::take(pinned.len))) // set to 0
     }
 

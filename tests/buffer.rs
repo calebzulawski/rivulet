@@ -16,7 +16,7 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(mut sink: T, block: usize, co
             *value = rng.gen();
             hasher.write_i64(*value);
         }
-        sink.release(block).await.unwrap();
+        sink.release(block);
     }
     hasher.finish()
 }
@@ -34,7 +34,7 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
             hasher.write_i64(*value);
         }
         let released = source.view().len();
-        source.release(released).await.unwrap();
+        source.release(released);
     }
 }
 

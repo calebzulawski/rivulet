@@ -1,7 +1,5 @@
 use crate::{
-    buffer::unsafe_circular_buffer::UnsafeCircularBuffer,
-    error::{GrantOverflow, Infallible},
-    View, ViewMut,
+    buffer::unsafe_circular_buffer::UnsafeCircularBuffer, error::GrantOverflow, View, ViewMut,
 };
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
@@ -185,13 +183,9 @@ where
         }
     }
 
-    fn poll_release_impl(
-        mut self: Pin<&mut Self>,
-        _: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Infallible>> {
+    fn release_impl(&mut self, count: usize) {
         if count == 0 {
-            return Poll::Ready(Ok(()));
+            return;
         }
 
         assert!(
@@ -204,8 +198,6 @@ where
         self.available -= count;
         self.state.tail.store(self.tail, Ordering::Relaxed);
         self.state.readers.wake();
-
-        Poll::Ready(Ok(()))
     }
 }
 
@@ -299,11 +291,11 @@ where
         }
     }
 
-    fn poll_release_impl(
-        mut self: Pin<&mut Self>,
-        _: &mut Context,
-        count: usize,
-    ) -> Poll<Result<(), Infallible>> {
+    fn release_impl(&mut self, count: usize) {
+        if count == 0 {
+            return;
+        }
+
         assert!(
             count <= self.available,
             "attempted to release more than current grant"
@@ -314,8 +306,6 @@ where
         self.available -= count;
         self.reader.head.store(self.head, Ordering::Relaxed);
         self.state.write_waker.wake();
-
-        Poll::Ready(Ok(()))
     }
 }
 
@@ -385,8 +375,7 @@ pub mod spmc {
 
     impl<T: Send + Sync + 'static> View for Sink<T> {
         type Item = T;
-        type GrantError = GrantOverflow;
-        type ReleaseError = Infallible;
+        type Error = GrantOverflow;
 
         fn view(&self) -> &[Self::Item] {
             self.0.view_impl()
@@ -401,13 +390,8 @@ pub mod spmc {
             pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_release(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Infallible>> {
-            let pinned = self.project();
-            pinned.0.poll_release_impl(cx, count)
+        fn release(&mut self, count: usize) {
+            self.0.release_impl(count)
         }
     }
 
@@ -419,8 +403,7 @@ pub mod spmc {
 
     impl<T> View for Source<T> {
         type Item = T;
-        type GrantError = GrantOverflow;
-        type ReleaseError = Infallible;
+        type Error = GrantOverflow;
 
         fn view(&self) -> &[Self::Item] {
             self.0.view_impl()
@@ -435,13 +418,8 @@ pub mod spmc {
             pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_release(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Infallible>> {
-            let pinned = self.project();
-            pinned.0.poll_release_impl(cx, count)
+        fn release(&mut self, count: usize) {
+            self.0.release_impl(count)
         }
     }
 
@@ -504,8 +482,7 @@ pub mod spsc {
 
     impl<T: Send + Sync + 'static> View for Sink<T> {
         type Item = T;
-        type GrantError = GrantOverflow;
-        type ReleaseError = Infallible;
+        type Error = GrantOverflow;
 
         fn view(&self) -> &[Self::Item] {
             self.0.view_impl()
@@ -520,13 +497,8 @@ pub mod spsc {
             pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_release(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Infallible>> {
-            let pinned = self.project();
-            pinned.0.poll_release_impl(cx, count)
+        fn release(&mut self, count: usize) {
+            self.0.release_impl(count)
         }
     }
 
@@ -538,8 +510,7 @@ pub mod spsc {
 
     impl<T> View for Source<T> {
         type Item = T;
-        type GrantError = GrantOverflow;
-        type ReleaseError = Infallible;
+        type Error = GrantOverflow;
 
         fn view(&self) -> &[Self::Item] {
             self.0.view_impl()
@@ -554,13 +525,8 @@ pub mod spsc {
             pinned.0.poll_grant_impl(cx, count)
         }
 
-        fn poll_release(
-            self: Pin<&mut Self>,
-            cx: &mut Context,
-            count: usize,
-        ) -> Poll<Result<(), Infallible>> {
-            let pinned = self.project();
-            pinned.0.poll_release_impl(cx, count)
+        fn release(&mut self, count: usize) {
+            self.0.release_impl(count)
         }
     }
 
