@@ -1,9 +1,15 @@
-use crate::{
-    buffer::unsafe_circular_buffer::UnsafeCircularBuffer, error::GrantOverflow, View, ViewMut,
-};
+#![cfg(all(feature = "std"))]
+#![cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
+//! Asynchronous circular buffers.
+//!
+//! These buffers are optimized for contiguous memory segments and never copy data to other regions
+//! of the buffer.
+use crate::{error::GrantOverflow, View, ViewMut};
 use futures::task::AtomicWaker;
+use num_integer::{div_ceil, lcm};
 use pin_project::pin_project;
 use std::{
+    mem::{size_of, MaybeUninit},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -11,6 +17,70 @@ use std::{
     },
     task::{Context, Poll},
 };
+
+struct UnsafeCircularBuffer<T> {
+    ptr: *mut T,
+    size: usize,
+}
+
+unsafe impl<T> Send for UnsafeCircularBuffer<T> where T: Send {}
+unsafe impl<T> Sync for UnsafeCircularBuffer<T> where T: Send {}
+
+impl<T> Drop for UnsafeCircularBuffer<T> {
+    fn drop(&mut self) {
+        unsafe {
+            for i in 0..self.size {
+                std::ptr::drop_in_place(self.ptr.add(i));
+            }
+            vmap::os::unmap_ring(self.ptr as *mut u8, self.size * size_of::<T>()).unwrap();
+        }
+    }
+}
+
+impl<T: Default> UnsafeCircularBuffer<T> {
+    pub fn new(minimum_size: usize) -> Self {
+        // Determine the smallest buffer larger than minimum_size that is both a multiple of the
+        // allocation size and the type size.
+        let size_bytes = {
+            let granularity = lcm(vmap::allocation_size(), size_of::<T>());
+            div_ceil(minimum_size * size_of::<T>(), granularity)
+                .checked_mul(granularity)
+                .unwrap()
+        };
+        let size = size_bytes / size_of::<T>();
+
+        // Initialize the buffer memory
+        let ptr = unsafe {
+            let ptr = vmap::os::map_ring(size_bytes).unwrap() as *mut T;
+            for v in std::slice::from_raw_parts_mut(ptr as *mut MaybeUninit<T>, size) {
+                v.as_mut_ptr().write(T::default());
+            }
+            ptr
+        };
+
+        Self { ptr, size }
+    }
+}
+
+impl<T> UnsafeCircularBuffer<T> {
+    pub fn len(&self) -> usize {
+        self.size
+    }
+
+    pub unsafe fn range(&self, offset: usize, size: usize) -> &[T] {
+        debug_assert!(offset < self.len());
+        debug_assert!(size <= self.len());
+        std::slice::from_raw_parts(self.ptr.add(offset), size)
+    }
+
+    // Only safe if you can guarantee no other references to the same range
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn range_mut(&self, offset: usize, size: usize) -> &mut [T] {
+        debug_assert!(offset < self.len());
+        debug_assert!(size <= self.len());
+        std::slice::from_raw_parts_mut(self.ptr.add(offset), size)
+    }
+}
 
 // Shared state
 struct State<T, R> {

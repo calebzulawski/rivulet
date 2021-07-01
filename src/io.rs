@@ -1,3 +1,5 @@
+#![cfg(all(feature = "std"))]
+#![cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
 //! Utilities for working with [`std::io`].
 
 use crate::{Sink, Source};

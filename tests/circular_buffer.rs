@@ -1,6 +1,6 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use rivulet::{
-    buffer::circular_buffer::{spmc, spsc},
+    circular_buffer::{spmc, spsc},
     Sink, Source,
 };
 use std::hash::Hasher;

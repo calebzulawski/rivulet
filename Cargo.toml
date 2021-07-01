@@ -10,10 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [features]
-default = ["std", "io", "buffer"]
-std = []
-io = []
-buffer = ["num-integer", "vmap"]
+default = ["std"]
+std = ["num-integer", "vmap"]
 
 [dependencies]
 pin-project = "1"
