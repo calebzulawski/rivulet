@@ -8,3 +8,4 @@ pub use base::*;
 pub mod circular_buffer;
 pub mod error;
 pub mod io;
+pub mod slice;
