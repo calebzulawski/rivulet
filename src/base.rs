@@ -90,7 +90,11 @@ pub trait View {
         E: core::fmt::Debug,
         F: Fn(Self::Error) -> E,
     {
-        MapError { view: self, map: f }
+        MapError {
+            view: self,
+            map: f,
+            _error: core::marker::PhantomData,
+        }
     }
 }
 
@@ -142,22 +146,14 @@ pub trait Sink: ViewMut {}
 
 /// An error-mapped view produced by [`View::map_error`].
 #[pin_project]
-pub struct MapError<V, E, F>
-where
-    V: View + Sized,
-    E: core::fmt::Debug,
-    F: Fn(V::Error) -> E,
-{
+#[derive(Debug)]
+pub struct MapError<V, E, F> {
     view: V,
     map: F,
+    _error: core::marker::PhantomData<E>,
 }
 
-impl<V, E, F> MapError<V, E, F>
-where
-    V: View + Unpin,
-    E: core::fmt::Debug,
-    F: Fn(V::Error) -> E,
-{
+impl<V, E, F> MapError<V, E, F> {
     /// Return the original view.
     pub fn into_inner(self) -> V {
         self.view
@@ -219,4 +215,39 @@ where
     E: core::fmt::Debug,
     F: Fn(V::Error) -> E,
 {
+}
+
+impl<V, E, F> Copy for MapError<V, E, F>
+where
+    V: Copy,
+    F: Copy,
+{
+}
+
+impl<V, E, F> Clone for MapError<V, E, F>
+where
+    V: Clone,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view.clone(),
+            map: self.map.clone(),
+            _error: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<V, E, F> core::hash::Hash for MapError<V, E, F>
+where
+    V: core::hash::Hash,
+    F: core::hash::Hash,
+{
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: core::hash::Hasher,
+    {
+        self.view.hash(state);
+        self.map.hash(state);
+    }
 }
