@@ -82,6 +82,16 @@ pub trait View {
     {
         futures::executor::block_on(self.grant(count))
     }
+
+    /// Maps this view to a new view producing error `E`.
+    fn map_error<E, F>(self, f: F) -> MapError<Self, E, F>
+    where
+        Self: Sized + Unpin,
+        E: core::fmt::Debug,
+        F: Fn(Self::Error) -> E,
+    {
+        MapError { view: self, map: f }
+    }
 }
 
 impl<S: ?Sized + View + Unpin> View for &mut S {
@@ -129,3 +139,84 @@ pub trait Source: View {}
 ///
 /// Any data in a released view is committed to the stream.
 pub trait Sink: ViewMut {}
+
+/// An error-mapped view produced by [`View::map_error`].
+#[pin_project]
+pub struct MapError<V, E, F>
+where
+    V: View + Sized,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+    view: V,
+    map: F,
+}
+
+impl<V, E, F> MapError<V, E, F>
+where
+    V: View + Unpin,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+    /// Return the original view.
+    pub fn into_inner(self) -> V {
+        self.view
+    }
+}
+
+impl<V, E, F> View for MapError<V, E, F>
+where
+    V: View + Unpin,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+    type Item = V::Item;
+    type Error = E;
+
+    fn view(&self) -> &[Self::Item] {
+        self.view.view()
+    }
+
+    fn poll_grant(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+        count: usize,
+    ) -> Poll<Result<(), Self::Error>> {
+        let pinned = self.project();
+        let f = pinned.map;
+        Pin::new(pinned.view)
+            .poll_grant(cx, count)
+            .map(|r| r.map_err(f))
+    }
+
+    fn release(&mut self, count: usize) {
+        self.view.release(count)
+    }
+}
+
+impl<V, E, F> ViewMut for MapError<V, E, F>
+where
+    V: ViewMut + Unpin,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+    fn view_mut(&mut self) -> &mut [Self::Item] {
+        self.view.view_mut()
+    }
+}
+
+impl<V, E, F> Source for MapError<V, E, F>
+where
+    V: Source + Unpin,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+}
+
+impl<V, E, F> Sink for MapError<V, E, F>
+where
+    V: Sink + Unpin,
+    E: core::fmt::Debug,
+    F: Fn(V::Error) -> E,
+{
+}
