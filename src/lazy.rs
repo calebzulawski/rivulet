@@ -8,6 +8,7 @@ use pin_project::pin_project;
 ///
 /// The view is only initialized when polled for a grant.
 #[pin_project]
+#[derive(Copy, Clone, Debug, Hash)]
 pub struct Lazy<V, F> {
     view: Option<V>,
     init: Option<F>,
@@ -25,6 +26,14 @@ impl<V, F> Lazy<V, F> {
     /// Return the inner type, if it has been initialized.
     pub fn into_inner(self) -> Option<V> {
         self.view
+    }
+}
+
+#[cfg(feature = "std")]
+impl<V> Lazy<V, Box<dyn FnOnce() -> V>> {
+    /// Create a new lazy view with a boxed initialization function.
+    pub fn new_boxed(init: impl FnOnce() -> V + 'static) -> Self {
+        Self::new(Box::new(init))
     }
 }
 
@@ -68,4 +77,32 @@ where
                 .release(count)
         }
     }
+}
+
+impl<V, F> crate::ViewMut for Lazy<V, F>
+where
+    V: crate::ViewMut + Unpin,
+    F: FnOnce() -> V,
+{
+    fn view_mut(&mut self) -> &mut [Self::Item] {
+        if let Some(view) = self.view.as_mut() {
+            view.view_mut()
+        } else {
+            &mut []
+        }
+    }
+}
+
+impl<V, F> crate::Sink for Lazy<V, F>
+where
+    V: crate::Sink + Unpin,
+    F: FnOnce() -> V,
+{
+}
+
+impl<V, F> crate::Source for Lazy<V, F>
+where
+    V: crate::Source + Unpin,
+    F: FnOnce() -> V,
+{
 }
