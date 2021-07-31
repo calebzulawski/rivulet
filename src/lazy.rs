@@ -1,3 +1,5 @@
+//! Lazy-initialized streams.
+
 use crate::{Sink, Source, View, ViewMut};
 use core::{
     pin::Pin,
