@@ -340,6 +340,9 @@
 <span id="340">340</span>
 <span id="341">341</span>
 <span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
 </pre><pre class="rust">
 <span class="doccomment">//! Lazy-initialized streams.</span>
 
@@ -501,6 +504,7 @@
 
     <span class="doccomment">/// A sink created by [`lazy_channel`].</span>
     <span class="attribute">#[<span class="ident">pin_project</span>]</span>
+    <span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))))]</span>
     <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LazyChannelSink</span><span class="op">&lt;</span><span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">F</span><span class="op">&gt;</span> {
         <span class="ident">view</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Sink</span><span class="op">&gt;</span>,
         <span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">LazyChannelImpl</span><span class="op">&lt;</span><span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">F</span><span class="op">&gt;</span><span class="op">&gt;</span>,
@@ -578,6 +582,7 @@
 
     <span class="doccomment">/// A source created by [`lazy_channel`].</span>
     <span class="attribute">#[<span class="ident">pin_project</span>]</span>
+    <span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))))]</span>
     <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LazyChannelSource</span><span class="op">&lt;</span><span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">F</span><span class="op">&gt;</span> {
         <span class="ident">view</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Source</span><span class="op">&gt;</span>,
         <span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">LazyChannelImpl</span><span class="op">&lt;</span><span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">F</span><span class="op">&gt;</span><span class="op">&gt;</span>,
@@ -658,6 +663,7 @@
     <span class="doccomment">/// Create a lazy-initialized channel.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// The channel is only initialized when first writing to the sink.</span>
+    <span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))))]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">lazy_channel</span><span class="op">&lt;</span><span class="ident">Sink</span>, <span class="ident">Source</span>, <span class="ident">F</span><span class="op">&gt;</span>(
         <span class="ident">f</span>: <span class="ident">F</span>,
     ) <span class="op">-</span><span class="op">&gt;</span> (
