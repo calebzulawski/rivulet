@@ -158,6 +158,7 @@ mod channel {
 
     /// A sink created by [`lazy_channel`].
     #[pin_project]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
     pub struct LazyChannelSink<Sink, Source, F> {
         view: Option<Sink>,
         shared: Arc<LazyChannelImpl<Sink, Source, F>>,
@@ -235,6 +236,7 @@ mod channel {
 
     /// A source created by [`lazy_channel`].
     #[pin_project]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
     pub struct LazyChannelSource<Sink, Source, F> {
         view: Option<Source>,
         shared: Arc<LazyChannelImpl<Sink, Source, F>>,
@@ -315,6 +317,7 @@ mod channel {
     /// Create a lazy-initialized channel.
     ///
     /// The channel is only initialized when first writing to the sink.
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
     pub fn lazy_channel<Sink, Source, F>(
         f: F,
     ) -> (
