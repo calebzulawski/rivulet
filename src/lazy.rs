@@ -34,6 +34,7 @@ impl<V, F> Lazy<V, F> {
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
 impl<V> Lazy<V, Box<dyn FnOnce() -> V>> {
     /// Create a new lazy view with a boxed initialization function.
     pub fn new_boxed(init: impl FnOnce() -> V + 'static) -> Self {
@@ -112,6 +113,7 @@ where
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
 mod channel {
     use super::*;
     use core::marker::PhantomData;
