@@ -10,3 +10,4 @@ pub mod error;
 pub mod io;
 pub mod lazy;
 pub mod slice;
+pub mod splittable;
