@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Source",""],["Split",""]],"trait":[["Splittable",""],["SplittableSource",""],["SplittableSourceMut",""]]});
+initSidebarItems({"struct":[["Cloneable","A source returned by `Splittable::into_cloneable_source`."],["Source","A source returned by `Splittable::into_source`."]],"trait":[["Splittable","A source that can be split for use with multiple readers."],["SplittableSource","Similar to [`crate::Source`], but can be used with multiple readers."],["SplittableSourceMut","A mutable source that can be used with multiple readers."]]});
