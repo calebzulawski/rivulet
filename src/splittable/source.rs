@@ -8,6 +8,7 @@ use std::{
     task::{Context, Poll},
 };
 
+/// A source returned by [`Splittable::into_source`](`super::Splittable::into_source`).
 #[pin_project]
 pub struct Source<T>
 where

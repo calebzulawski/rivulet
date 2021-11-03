@@ -39,7 +39,7 @@ pub trait View {
     /// Obtain the current view of the stream.
     ///
     /// This view is obtained by successfully polling [`poll_grant`](`Self::poll_grant`) and
-    /// advanced by successfully polling [`poll_release`](`Self::poll_release`).
+    /// advanced by calling [`release`](`Self::release`).
     ///
     /// If this slice is smaller than last successful grant request, the end of the stream has been
     /// reached and no additional values will be provided.

@@ -1,6 +1,5 @@
-use super::{SplittableSource, SplittableSourceMut};
+use super::SplittableSource;
 use futures::task::AtomicWaker;
-use pin_project::pin_project;
 use std::{
     convert::TryInto,
     pin::Pin,
@@ -16,9 +15,9 @@ struct Reader {
     head: AtomicU64,
 }
 
-pub(crate) struct SplitSignal(RwLock<Vec<Arc<Reader>>>);
+pub(crate) struct CloneableSignal(RwLock<Vec<Arc<Reader>>>);
 
-impl SplitSignal {
+impl CloneableSignal {
     /// Create a new signal with one reader
     pub(crate) fn new() -> Self {
         let reader = Reader {
@@ -48,30 +47,33 @@ impl SplitSignal {
     }
 
     /// Removes the specified reader
-    fn remove(&self, reader: &Arc<Reader>) -> bool {
+    fn remove(&self, reader: &Arc<Reader>) {
         let mut lock = self.0.write().expect("another thread panicked");
         lock.retain(|test_reader| !Arc::ptr_eq(test_reader, reader));
-        lock.is_empty()
     }
 }
 
-#[pin_project]
-pub struct Split<T>
+/// A source returned by
+/// [`Splittable::into_cloneable_source`](`super::Splittable::into_cloneable_source`).
+///
+/// This source may be cloned to be used with other readers.  The cloned source is initialized with
+/// the same view of the stream.
+pub struct Cloneable<T>
 where
     T: SplittableSource,
 {
     source: Arc<T>,
     this_reader: Arc<Reader>,
-    signal: Arc<SplitSignal>,
+    signal: Arc<CloneableSignal>,
     head: u64,
     len: usize,
 }
 
-impl<T> Split<T>
+impl<T> Cloneable<T>
 where
     T: SplittableSource,
 {
-    pub(crate) fn new(signal: Arc<SplitSignal>, source: T) -> Self {
+    pub(crate) fn new(signal: Arc<CloneableSignal>, source: T) -> Self {
         let this_reader = signal.0.read().expect("another thread panicked")[0].clone();
         Self {
             source: Arc::new(source),
@@ -83,7 +85,32 @@ where
     }
 }
 
-impl<T> crate::View for Split<T>
+impl<T> Clone for Cloneable<T>
+where
+    T: SplittableSource,
+{
+    fn clone(&self) -> Self {
+        let this_reader = self.signal.insert(&self.this_reader);
+        Self {
+            source: self.source.clone(),
+            this_reader,
+            signal: self.signal.clone(),
+            head: self.head,
+            len: self.len,
+        }
+    }
+}
+
+impl<T> Drop for Cloneable<T>
+where
+    T: SplittableSource,
+{
+    fn drop(&mut self) {
+        self.signal.remove(&self.this_reader);
+    }
+}
+
+impl<T> crate::View for Cloneable<T>
 where
     T: SplittableSource + Unpin,
 {
@@ -96,19 +123,18 @@ where
     }
 
     fn poll_grant(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Self::Error>> {
-        let pinned = self.project();
-        match Pin::new(pinned.source.as_ref()).poll_available(
+        match Pin::new(self.source.as_ref()).poll_available(
             cx,
-            |waker| pinned.this_reader.waker.register(waker),
-            *pinned.head,
+            |waker| self.this_reader.waker.register(waker),
+            self.head,
             count,
         ) {
             Poll::Ready(Ok(len)) => {
-                *pinned.len = len;
+                self.len = len;
                 Poll::Ready(Ok(()))
             }
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
@@ -125,14 +151,4 @@ where
     }
 }
 
-impl<T> crate::ViewMut for Split<T>
-where
-    T: SplittableSourceMut + Unpin,
-{
-    fn view_mut(&mut self) -> &mut [Self::Item] {
-        // we have unique ownership of the source, so this doesn't overlap with any other views
-        unsafe { self.source.view_mut(self.head, self.len) }
-    }
-}
-
-impl<T> crate::Source for Split<T> where T: SplittableSource + Unpin {}
+impl<T> crate::Source for Cloneable<T> where T: SplittableSource + Unpin {}
