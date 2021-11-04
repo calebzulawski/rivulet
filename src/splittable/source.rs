@@ -1,7 +1,4 @@
-use super::{
-    implementation::{IntoSplittableSource, SplittableSource, SplittableSourceMut},
-    Splittable,
-};
+use super::{Splittable, SplittableMut};
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
 use std::{
@@ -18,7 +15,7 @@ where
     T: Splittable,
 {
     #[pin]
-    source: T::Source,
+    splittable: T,
     waker: Arc<AtomicWaker>,
     head: u64,
     len: usize,
@@ -28,12 +25,15 @@ impl<T> Source<T>
 where
     T: Splittable,
 {
-    pub(crate) fn new(splittable: T) -> Self {
+    pub(crate) fn new(mut splittable: T) -> Self {
         let waker = Arc::new(AtomicWaker::new());
-        let waker_clone = waker.clone();
-        let source = splittable.into_splittable_source(move || waker_clone.wake());
+        // Safety: we have unique ownership of this
+        unsafe {
+            let waker = waker.clone();
+            splittable.set_reader_waker(move || waker.wake());
+        }
         Self {
-            source,
+            splittable,
             waker,
             head: 0,
             len: 0,
@@ -45,12 +45,12 @@ impl<T> crate::View for Source<T>
 where
     T: Splittable,
 {
-    type Item = <<T as IntoSplittableSource>::Source as SplittableSource>::Item;
-    type Error = <<T as IntoSplittableSource>::Source as SplittableSource>::Error;
+    type Item = T::Item;
+    type Error = T::Error;
 
     fn view(&self) -> &[Self::Item] {
         // we have unique ownership of the source, so this doesn't overlap with any other views
-        unsafe { self.source.view(self.head, self.len) }
+        unsafe { self.splittable.view(self.head, self.len) }
     }
 
     fn poll_grant(
@@ -59,7 +59,7 @@ where
         count: usize,
     ) -> Poll<Result<(), Self::Error>> {
         let pinned = self.project();
-        match pinned.source.as_ref().poll_available(
+        match pinned.splittable.as_ref().poll_available(
             cx,
             |waker| pinned.waker.register(waker),
             *pinned.head,
@@ -78,18 +78,20 @@ where
         self.len -= count;
         let count: u64 = count.try_into().unwrap();
         self.head += count;
-        self.source.set_head(self.head);
+        // Safety: we never read earlier than this head value
+        unsafe {
+            self.splittable.set_head(self.head);
+        }
     }
 }
 
 impl<T> crate::ViewMut for Source<T>
 where
-    T: Splittable,
-    T::Source: SplittableSourceMut,
+    T: SplittableMut,
 {
     fn view_mut(&mut self) -> &mut [Self::Item] {
         // we have unique ownership of the source, so this doesn't overlap with any other views
-        unsafe { self.source.view_mut(self.head, self.len) }
+        unsafe { self.splittable.view_mut(self.head, self.len) }
     }
 }
 

@@ -1,7 +1,4 @@
-use super::{
-    implementation::{IntoSplittableSource, SplittableSource},
-    Splittable,
-};
+use super::Splittable;
 use futures::task::AtomicWaker;
 use std::{
     convert::TryInto,
@@ -54,6 +51,15 @@ impl Waker {
         let mut lock = self.0.write().expect("another thread panicked");
         lock.retain(|test_reader| !Arc::ptr_eq(test_reader, reader));
     }
+
+    /// Return the earliest head between all threads
+    fn earliest_head(&self) -> u64 {
+        let lock = self.0.read().expect("another thread panicked");
+        lock.iter()
+            .map(|reader| reader.head.load(Ordering::Relaxed))
+            .min()
+            .unwrap()
+    }
 }
 
 /// A source returned by
@@ -65,7 +71,7 @@ pub struct Cloneable<T>
 where
     T: Splittable,
 {
-    source: Pin<Arc<T::Source>>,
+    splittable: Pin<Arc<T>>,
     this_reader: Arc<Reader>,
     waker: Arc<Waker>,
     head: u64,
@@ -76,13 +82,17 @@ impl<T> Cloneable<T>
 where
     T: Splittable,
 {
-    pub(crate) fn new(splittable: T) -> Self {
+    pub(crate) fn new(mut splittable: T) -> Self {
         let waker = Arc::new(Waker::new());
-        let waker_clone = waker.clone();
-        let source = Arc::pin(splittable.into_splittable_source(move || waker_clone.wake()));
+        // Safety: we have unique ownership of `splittable`
+        let splittable = unsafe {
+            let waker = waker.clone();
+            splittable.set_reader_waker(move || waker.wake());
+            Arc::pin(splittable)
+        };
         let this_reader = waker.0.read().expect("another thread panicked")[0].clone();
         Self {
-            source,
+            splittable,
             this_reader,
             waker,
             head: 0,
@@ -98,7 +108,7 @@ where
     fn clone(&self) -> Self {
         let this_reader = self.waker.insert(&self.this_reader);
         Self {
-            source: self.source.clone(),
+            splittable: self.splittable.clone(),
             this_reader,
             waker: self.waker.clone(),
             head: self.head,
@@ -120,12 +130,12 @@ impl<T> crate::View for Cloneable<T>
 where
     T: Splittable,
 {
-    type Item = <<T as IntoSplittableSource>::Source as SplittableSource>::Item;
-    type Error = <<T as IntoSplittableSource>::Source as SplittableSource>::Error;
+    type Item = T::Item;
+    type Error = T::Error;
 
     fn view(&self) -> &[Self::Item] {
         // we have unique ownership of the source, so this doesn't overlap with any other views
-        unsafe { self.source.view(self.head, self.len) }
+        unsafe { self.splittable.view(self.head, self.len) }
     }
 
     fn poll_grant(
@@ -133,7 +143,7 @@ where
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Self::Error>> {
-        match self.source.as_ref().poll_available(
+        match self.splittable.as_ref().poll_available(
             cx,
             |waker| self.this_reader.waker.register(waker),
             self.head,
@@ -153,7 +163,13 @@ where
         let count: u64 = count.try_into().unwrap();
         self.head += count;
         self.this_reader.head.store(self.head, Ordering::Relaxed);
-        self.source.as_ref().compare_set_head(self.head);
+
+        // Safety: we never read earlier than this head value with this reader
+        unsafe {
+            self.splittable
+                .as_ref()
+                .compare_set_head(self.waker.earliest_head());
+        }
     }
 }
 
