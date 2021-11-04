@@ -1,4 +1,7 @@
-use super::{SplittableSource, SplittableSourceMut};
+use super::{
+    implementation::{IntoSplittableSource, SplittableSource, SplittableSourceMut},
+    Splittable,
+};
 use futures::task::AtomicWaker;
 use pin_project::pin_project;
 use std::{
@@ -12,10 +15,10 @@ use std::{
 #[pin_project]
 pub struct Source<T>
 where
-    T: SplittableSource,
+    T: Splittable,
 {
     #[pin]
-    source: T,
+    source: T::Source,
     waker: Arc<AtomicWaker>,
     head: u64,
     len: usize,
@@ -23,9 +26,12 @@ where
 
 impl<T> Source<T>
 where
-    T: SplittableSource,
+    T: Splittable,
 {
-    pub(crate) fn new(waker: Arc<AtomicWaker>, source: T) -> Self {
+    pub(crate) fn new(splittable: T) -> Self {
+        let waker = Arc::new(AtomicWaker::new());
+        let waker_clone = waker.clone();
+        let source = splittable.into_splittable_source(move || waker_clone.wake());
         Self {
             source,
             waker,
@@ -37,10 +43,10 @@ where
 
 impl<T> crate::View for Source<T>
 where
-    T: SplittableSource + Unpin,
+    T: Splittable,
 {
-    type Item = T::Item;
-    type Error = T::Error;
+    type Item = <<T as IntoSplittableSource>::Source as SplittableSource>::Item;
+    type Error = <<T as IntoSplittableSource>::Source as SplittableSource>::Error;
 
     fn view(&self) -> &[Self::Item] {
         // we have unique ownership of the source, so this doesn't overlap with any other views
@@ -78,7 +84,8 @@ where
 
 impl<T> crate::ViewMut for Source<T>
 where
-    T: SplittableSourceMut + Unpin,
+    T: Splittable,
+    T::Source: SplittableSourceMut,
 {
     fn view_mut(&mut self) -> &mut [Self::Item] {
         // we have unique ownership of the source, so this doesn't overlap with any other views
@@ -86,4 +93,4 @@ where
     }
 }
 
-impl<T> crate::Source for Source<T> where T: SplittableSource + Unpin {}
+impl<T> crate::Source for Source<T> where T: Splittable {}
