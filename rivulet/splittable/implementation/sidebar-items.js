@@ -1,1 +1,0 @@
-initSidebarItems({"trait":[["IntoSplittableSource","Trait for constructing types that implement [`SplittableSource`]."],["SplittableSource","Similar to [`crate::Source`], but can be used with multiple readers."],["SplittableSourceMut","A mutable source that can be used with multiple readers."]]});
