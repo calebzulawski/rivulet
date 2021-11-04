@@ -27,7 +27,7 @@ pub unsafe trait SplittableImpl {
     ///
     /// # Safety
     /// Only set the waker if you have unique ownership of this.
-    unsafe fn set_reader_waker(&mut self, waker: impl Fn());
+    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + 'static);
 
     /// Set the earliest position retained in the stream.
     ///
