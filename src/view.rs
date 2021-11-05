@@ -1,4 +1,4 @@
-//! Traits defining common stream interfaces.
+//! Views into asynchronous streams.
 
 use core::{
     future::Future,

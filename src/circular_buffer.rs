@@ -1,6 +1,6 @@
 #![cfg(all(feature = "std"))]
 #![cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
-//! An asynchronous circular buffer.
+//! An asynchronous copy-free circular buffer.
 //!
 //! This buffer is optimized for contiguous memory segments and never copies data to other regions
 //! of the buffer.
