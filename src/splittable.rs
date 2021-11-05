@@ -27,7 +27,7 @@ pub unsafe trait SplittableImpl {
     ///
     /// # Safety
     /// Only set the waker if you have unique ownership of this.
-    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + 'static);
+    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + Send + Sync + 'static);
 
     /// Set the earliest position retained in the stream.
     ///
@@ -45,7 +45,7 @@ pub unsafe trait SplittableImpl {
     /// If the provided head is less than the current head, the current head remains unchanged.
     ///
     /// # Safety
-    /// See [`set_head`].
+    /// See [`set_head`](`Self::set_head`).
     unsafe fn compare_set_head(&self, index: u64);
 
     /// Suspends the current task until `len` samples starting at `index` are available, returning
@@ -76,7 +76,7 @@ pub trait SplittableImplMut: SplittableImpl {
     ///
     /// # Safety
     /// * The parameters must be within an available window as returned by
-    /// [`poll_available`](`SplittableSource::poll_available`).
+    /// [`poll_available`](`SplittableImpl::poll_available`).
     /// * The view must not overlap with any other view of this stream.
     ///
     /// Note that this function produces a mutable reference from a regular reference.
@@ -107,3 +107,6 @@ pub trait Splittable: SplittableImpl {
 
 /// A mutable source that can be split for use with multiple readers.
 pub trait SplittableMut: Splittable + SplittableImplMut {}
+
+impl<T> Splittable for T where T: SplittableImpl {}
+impl<T> SplittableMut for T where T: Splittable + SplittableImplMut {}

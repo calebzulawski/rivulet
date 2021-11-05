@@ -75,6 +75,11 @@ where
     }
 
     fn release(&mut self, count: usize) {
+        assert!(
+            count <= self.len,
+            "attempted to release more than current grant"
+        );
+
         self.len -= count;
         let count: u64 = count.try_into().unwrap();
         self.head += count;

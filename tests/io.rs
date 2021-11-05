@@ -1,14 +1,14 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::circular_buffer::spsc::buffer;
+use rivulet::{circular_buffer, Splittable};
 use std::hash::{Hash, Hasher};
 
 #[tokio::test]
 async fn async_reader_writer() {
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
-    let (sink, source) = buffer(4096);
+    let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::AsyncWriter::new(sink);
-    let mut read = rivulet::io::AsyncReader::new(source);
+    let mut read = rivulet::io::AsyncReader::new(source.into_source());
 
     let sent = tokio::spawn(async move {
         let mut rng = SmallRng::from_entropy();
@@ -35,9 +35,9 @@ async fn async_reader_writer() {
 async fn async_bufreader_writer() {
     use futures::io::{AsyncBufReadExt, AsyncWriteExt};
 
-    let (sink, source) = buffer(4096);
+    let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::AsyncWriter::new(sink);
-    let mut read = rivulet::io::AsyncReader::new(source);
+    let mut read = rivulet::io::AsyncReader::new(source.into_source());
 
     let sent = tokio::spawn(async move {
         let mut rng = SmallRng::from_entropy();
@@ -64,9 +64,9 @@ async fn async_bufreader_writer() {
 fn sync_reader_writer() {
     use std::io::{Read, Write};
 
-    let (sink, source) = buffer(4096);
+    let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::Writer::new(sink);
-    let mut read = rivulet::io::Reader::new(source);
+    let mut read = rivulet::io::Reader::new(source.into_source());
 
     let sent = std::thread::spawn(move || {
         let mut rng = SmallRng::from_entropy();
@@ -94,9 +94,9 @@ fn sync_reader_writer() {
 fn sync_bufreader_writer() {
     use std::io::{BufRead, Write};
 
-    let (sink, source) = buffer(4096);
+    let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::Writer::new(sink);
-    let mut read = rivulet::io::Reader::new(source);
+    let mut read = rivulet::io::Reader::new(source.into_source());
 
     let sent = std::thread::spawn(move || {
         let mut rng = SmallRng::from_entropy();

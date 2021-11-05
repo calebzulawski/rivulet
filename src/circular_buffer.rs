@@ -1,8 +1,8 @@
 #![cfg(all(feature = "std"))]
 #![cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
-//! Asynchronous circular buffers.
+//! An asynchronous circular buffer.
 //!
-//! These buffers are optimized for contiguous memory segments and never copy data to other regions
+//! This buffer is optimized for contiguous memory segments and never copies data to other regions
 //! of the buffer.
 use crate::{
     error::GrantOverflow,
@@ -17,7 +17,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     task::{Context, Poll, Waker},
 };
@@ -89,14 +89,14 @@ impl<T> UnsafeCircularBuffer<T> {
     }
 }
 
-// Shared state
+/// Shared state
 struct State<T> {
     buffer: UnsafeCircularBuffer<T>,
-    closed: AtomicBool,          // true if the stream is closed
-    head: AtomicU64,             // start index of written data
-    tail: AtomicU64,             // start index of unwritten data
-    write_waker: AtomicWaker,    // waker waited on by the writer
-    wake_readers: Box<dyn Fn()>, // wake readers when new data is available
+    closed: AtomicBool,       // true if the stream is closed
+    head: AtomicU64,          // start index of written data
+    tail: AtomicU64,          // start index of unwritten data
+    write_waker: AtomicWaker, // waker waited on by the writer
+    read_waker: Mutex<Option<Box<dyn Fn() + Send + Sync>>>, // wake readers when new data is available
 }
 
 impl<T: Default> State<T> {
@@ -109,7 +109,7 @@ impl<T: Default> State<T> {
             head: AtomicU64::new(0),
             tail: AtomicU64::new(0),
             write_waker: AtomicWaker::new(),
-            wake_readers: Box::new(|| {}),
+            read_waker: Mutex::new(None),
         }
     }
 }
@@ -126,10 +126,14 @@ impl<T> State<T> {
     }
 }
 
+/// The writer of a circular buffer.
+///
+/// Writes made to this become available at the associated [`Source`].
 pub struct Sink<T> {
     state: Arc<State<T>>,
     tail: u64,
     available: usize,
+    read_waker: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl<T> Sink<T> {
@@ -138,6 +142,21 @@ impl<T> Sink<T> {
             state,
             tail: 0,
             available: 0,
+            read_waker: None,
+        }
+    }
+
+    fn wake_readers(&mut self) {
+        if self.read_waker.is_none() {
+            let mut lock = self
+                .state
+                .read_waker
+                .lock()
+                .expect("another thread panicked");
+            std::mem::swap(&mut *lock, &mut self.read_waker);
+        }
+        if let Some(read_waker) = self.read_waker.as_ref() {
+            read_waker()
         }
     }
 }
@@ -145,7 +164,7 @@ impl<T> Sink<T> {
 impl<T> Drop for Sink<T> {
     fn drop(&mut self) {
         self.state.closed.store(true, Ordering::Relaxed);
-        (self.state.wake_readers)(); // waiting readers can exit without sufficient data
+        self.wake_readers(); // waiting readers can exit without sufficient data
     }
 }
 
@@ -158,7 +177,7 @@ impl<T> View for Sink<T> {
     }
 
     fn poll_grant(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), GrantOverflow>> {
@@ -173,11 +192,15 @@ impl<T> View for Sink<T> {
         // Perform double-checking on the amount of available data
         // The first check is efficient, but may spuriously fail.
         // The second check occurs after the `acquire` produced by registering the waker.
-        if self.state.writeable_len() >= count {
+        let available = self.state.writeable_len();
+        if available >= count {
+            self.available = available;
             Poll::Ready(Ok(()))
         } else {
             self.state.write_waker.register(cx.waker());
-            if self.state.writeable_len() >= count || self.state.closed.load(Ordering::Relaxed) {
+            let available = self.state.writeable_len();
+            if available >= count || self.state.closed.load(Ordering::Relaxed) {
+                self.available = available;
                 Poll::Ready(Ok(()))
             } else {
                 Poll::Pending
@@ -200,7 +223,7 @@ impl<T> View for Sink<T> {
         let count: u64 = count.try_into().unwrap();
         self.tail += count;
         self.state.tail.store(self.tail, Ordering::Relaxed);
-        (self.state.wake_readers)();
+        self.wake_readers();
     }
 }
 
@@ -212,6 +235,9 @@ impl<T> ViewMut for Sink<T> {
 
 impl<T> crate::Sink for Sink<T> {}
 
+/// The reader of a circular buffer.
+///
+/// Writes made to the associated [`Sink`] are made available to this.
 pub struct Source<T> {
     state: Arc<State<T>>,
 }
@@ -233,12 +259,19 @@ unsafe impl<T> SplittableImpl for Source<T> {
     type Item = T;
     type Error = GrantOverflow;
 
-    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + 'static) {
-        self.state.wake_readers = Box::new(waker);
+    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + Send + Sync + 'static) {
+        let mut lock = self
+            .state
+            .read_waker
+            .lock()
+            .expect("another thread panicked");
+        assert!(lock.is_none(), "reader waker already set!");
+        *lock = Some(Box::new(waker));
     }
 
     unsafe fn set_head(&mut self, index: u64) {
         self.state.head.store(index, Ordering::Relaxed);
+        self.state.write_waker.wake();
     }
 
     unsafe fn compare_set_head(&self, index: u64) {
@@ -258,6 +291,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
                 }
             }
         }
+        self.state.write_waker.wake();
     }
 
     fn poll_available(
@@ -300,7 +334,13 @@ impl<T> SplittableImplMut for Source<T> {
     }
 }
 
-pub fn buffer<T: Send + Sync + Default + 'static>(min_size: usize) -> (Sink<T>, Source<T>) {
+/// Create a circular buffer that can hold at least `min_size` elements.
+///
+/// # Panics
+/// Panics if `min_size` is 0.
+pub fn circular_buffer<T: Send + Sync + Default + 'static>(
+    min_size: usize,
+) -> (Sink<T>, Source<T>) {
     assert!(min_size > 0, "`min_size` must be greater than 0");
 
     let state = Arc::new(State::new(min_size));

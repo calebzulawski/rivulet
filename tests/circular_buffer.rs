@@ -1,8 +1,5 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{
-    circular_buffer::{spmc, spsc},
-    Sink, Source,
-};
+use rivulet::{circular_buffer, Sink, Source, Splittable};
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
@@ -39,19 +36,20 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
 }
 
 #[tokio::test]
-async fn spsc_buffer_integrity() {
-    let (sink, source) = spsc::buffer::<i64>(BUFFER_SIZE);
+async fn single_reader_buffer_integrity() {
+    let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
 
     let write_hash = tokio::spawn(write(sink, 500, 400));
-    let read_hash = tokio::spawn(read(source));
+    let read_hash = tokio::spawn(read(source.into_source()));
 
     let (write_hash, read_hash) = futures::future::join(write_hash, read_hash).await;
     assert_eq!(write_hash.unwrap(), read_hash.unwrap());
 }
 
 #[tokio::test]
-async fn spmc_buffer_integrity() {
-    let (sink, source) = spmc::buffer::<i64>(BUFFER_SIZE);
+async fn multiple_reader_buffer_integrity() {
+    let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
+    let source = source.into_cloneable_source();
 
     let write_hash = tokio::spawn(write(sink, 500, 400));
     let read_hashes = (0..10)

@@ -1,5 +1,5 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{circular_buffer::spsc, lazy, Sink, Source};
+use rivulet::{circular_buffer, lazy, Sink, Source, Splittable};
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
@@ -37,10 +37,10 @@ async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
 
 #[tokio::test]
 async fn lazy_view() {
-    let (sink, source) = spsc::buffer::<i64>(BUFFER_SIZE);
+    let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
 
     let write_hash = tokio::spawn(write(lazy::Lazy::new(|| sink), 500, 400));
-    let read_hash = tokio::spawn(read(lazy::Lazy::new(|| source)));
+    let read_hash = tokio::spawn(read(lazy::Lazy::new(|| source.into_source())));
 
     let (write_hash, read_hash) = futures::future::join(write_hash, read_hash).await;
     assert_eq!(write_hash.unwrap(), read_hash.unwrap());
@@ -48,7 +48,10 @@ async fn lazy_view() {
 
 #[tokio::test]
 async fn lazy_channel() {
-    let (sink, source) = lazy::lazy_channel(|| spsc::buffer::<i64>(BUFFER_SIZE));
+    let (sink, source) = lazy::lazy_channel(|| {
+        let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
+        (sink, source.into_source())
+    });
 
     let write_hash = tokio::spawn(write(sink, 500, 400));
     let read_hash = tokio::spawn(read(source));
