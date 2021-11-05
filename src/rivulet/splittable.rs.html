@@ -107,6 +107,9 @@
 <span id="107">107</span>
 <span id="108">108</span>
 <span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Streams that can be split into multiple sources.</span>
 
 <span class="kw">use</span> <span class="ident">core</span>::{
@@ -136,7 +139,7 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">/// Only set the waker if you have unique ownership of this.</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">set_reader_waker</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">waker</span>: <span class="kw">impl</span> <span class="ident">Fn</span>());
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">set_reader_waker</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">waker</span>: <span class="kw">impl</span> <span class="ident">Fn</span>() <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>);
 
     <span class="doccomment">/// Set the earliest position retained in the stream.</span>
     <span class="doccomment">///</span>
@@ -154,7 +157,7 @@
     <span class="doccomment">/// If the provided head is less than the current head, the current head remains unchanged.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
-    <span class="doccomment">/// See [`set_head`].</span>
+    <span class="doccomment">/// See [`set_head`](`Self::set_head`).</span>
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">compare_set_head</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="ident">u64</span>);
 
     <span class="doccomment">/// Suspends the current task until `len` samples starting at `index` are available, returning</span>
@@ -185,7 +188,7 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
     <span class="doccomment">/// * The parameters must be within an available window as returned by</span>
-    <span class="doccomment">/// [`poll_available`](`SplittableSource::poll_available`).</span>
+    <span class="doccomment">/// [`poll_available`](`SplittableImpl::poll_available`).</span>
     <span class="doccomment">/// * The view must not overlap with any other view of this stream.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Note that this function produces a mutable reference from a regular reference.</span>
@@ -216,6 +219,9 @@
 
 <span class="doccomment">/// A mutable source that can be split for use with multiple readers.</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SplittableMut</span>: <span class="ident">Splittable</span> <span class="op">+</span> <span class="ident">SplittableImplMut</span> {}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Splittable</span> <span class="kw">for</span> <span class="ident">T</span> <span class="kw">where</span> <span class="ident">T</span>: <span class="ident">SplittableImpl</span> {}
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableMut</span> <span class="kw">for</span> <span class="ident">T</span> <span class="kw">where</span> <span class="ident">T</span>: <span class="ident">Splittable</span> <span class="op">+</span> <span class="ident">SplittableImplMut</span> {}
 </code></pre></div>
 </section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="rivulet" data-search-index-js="../../search-index.js" data-search-js="../../search.js"></div>
     <script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script>

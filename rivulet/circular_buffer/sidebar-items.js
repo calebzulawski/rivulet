@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["spmc","A single-producer, multiple-consumer async circular buffer."],["spsc","A single-producer, single-consumer async circular buffer."]]});
+initSidebarItems({"fn":[["circular_buffer","Create a circular buffer that can hold at least `min_size` elements."]],"struct":[["Sink","The writer of a circular buffer."],["Source","The reader of a circular buffer."]]});

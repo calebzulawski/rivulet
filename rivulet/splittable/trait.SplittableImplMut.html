@@ -6,12 +6,12 @@
 <h5 id="safety" class="section-header"><a href="#safety">Safety</a></h5>
 <ul>
 <li>The parameters must be within an available window as returned by
-<a href="%60SplittableSource::poll_available%60"><code>poll_available</code></a>.</li>
+<a href="trait.SplittableImpl.html#tymethod.poll_available"><code>poll_available</code></a>.</li>
 <li>The view must not overlap with any other view of this stream.</li>
 </ul>
 <p>Note that this function produces a mutable reference from a regular reference.
 Implementations of this function must take care to correctly implement interior
 mutability (such as using <code>UnsafeCell</code>).</p>
-</div></details></div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor"></a></h2><div class="item-list" id="implementors-list"></div><script type="text/javascript" src="../../implementors/rivulet/splittable/trait.SplittableImplMut.js" async></script></section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="rivulet" data-search-index-js="../../search-index.js" data-search-js="../../search.js"></div>
+</div></details></div><h2 id="implementors" class="small-section-header">Implementors<a href="#implementors" class="anchor"></a></h2><div class="item-list" id="implementors-list"><div id="impl-SplittableImplMut" class="impl has-srclink"><div class="rightside"><a class="srclink" href="../../src/rivulet/circular_buffer.rs.html#331-335" title="goto source code">[src]</a></div><a href="#impl-SplittableImplMut" class="anchor"></a><h3 class="code-header in-band">impl&lt;T&gt; <a class="trait" href="trait.SplittableImplMut.html" title="trait rivulet::splittable::SplittableImplMut">SplittableImplMut</a> for <a class="struct" href="../circular_buffer/struct.Source.html" title="struct rivulet::circular_buffer::Source">Source</a>&lt;T&gt;</h3><div class="item-info"><div class="stab portability">This is supported on <strong>crate feature <code>std</code></strong> only.</div></div></div></div><script type="text/javascript" src="../../implementors/rivulet/splittable/trait.SplittableImplMut.js" async></script></section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="rivulet" data-search-index-js="../../search-index.js" data-search-js="../../search.js"></div>
     <script src="../../main.js"></script>
 </body></html>
