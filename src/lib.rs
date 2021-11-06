@@ -29,7 +29,7 @@
 //!             sink.grant(width).map_err(|_| "we got an output error!"),
 //!         )?;
 //!
-//!         // The view could be longer (if available) or shorter (if the stream closed)
+//!         // The view could be longer (if extra data is available) or shorter (if the stream closed)
 //!         let input = source.view();
 //!         let output = sink.view_mut();
 //!         if input.len() < width || output.len() < width {

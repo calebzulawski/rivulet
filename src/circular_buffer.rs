@@ -328,7 +328,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
     }
 }
 
-impl<T> SplittableImplMut for Source<T> {
+unsafe impl<T> SplittableImplMut for Source<T> {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item] {
         self.state.buffer.range_mut(index, len)
     }

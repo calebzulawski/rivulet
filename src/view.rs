@@ -17,7 +17,7 @@ pub struct Grant<'a, T> {
 
 impl<'a, T> Future for Grant<'a, T>
 where
-    T: View + Unpin,
+    T: View,
 {
     type Output = Result<(), T::Error>;
 
@@ -29,7 +29,7 @@ where
 }
 
 /// Obtain views into asynchronous contiguous-memory streams.
-pub trait View {
+pub trait View: Sized + Unpin {
     /// The streamed type.
     type Item;
 
@@ -63,10 +63,7 @@ pub trait View {
     /// Create a future that obtains a view of at least `count` elements.
     ///
     /// See [`poll_grant`](`Self::poll_grant`).
-    fn grant(&mut self, count: usize) -> Grant<'_, Self>
-    where
-        Self: Sized + Unpin,
-    {
+    fn grant(&mut self, count: usize) -> Grant<'_, Self> {
         Grant {
             handle: self,
             count,
@@ -76,18 +73,13 @@ pub trait View {
     /// Obtains a view of at least `count` elements, blocking the current thread.
     ///
     /// See [`poll_grant`](`View::poll_grant`).
-    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::Error>
-    where
-        Self: Sized + Unpin,
-    {
+    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::Error> {
         futures::executor::block_on(self.grant(count))
     }
 
     /// Maps this view to a new view producing error `E`.
     fn map_error<E, F>(self, f: F) -> MapError<Self, E, F>
     where
-        Self: Sized + Unpin,
-        E: core::fmt::Debug,
         F: Fn(Self::Error) -> E,
     {
         MapError {
@@ -98,7 +90,7 @@ pub trait View {
     }
 }
 
-impl<S: ?Sized + View + Unpin> View for &mut S {
+impl<S: View> View for &mut S {
     type Item = S::Item;
     type Error = S::Error;
 
@@ -128,7 +120,7 @@ pub trait ViewMut: View {
     fn view_mut(&mut self) -> &mut [Self::Item];
 }
 
-impl<S: ?Sized + ViewMut + Unpin> ViewMut for &mut S {
+impl<S: ViewMut> ViewMut for &mut S {
     fn view_mut(&mut self) -> &mut [Self::Item] {
         ViewMut::view_mut(*self)
     }
@@ -162,7 +154,7 @@ impl<V, E, F> MapError<V, E, F> {
 
 impl<V, E, F> View for MapError<V, E, F>
 where
-    V: View + Unpin,
+    V: View,
     E: core::fmt::Debug,
     F: Fn(V::Error) -> E,
 {
@@ -192,7 +184,7 @@ where
 
 impl<V, E, F> ViewMut for MapError<V, E, F>
 where
-    V: ViewMut + Unpin,
+    V: ViewMut,
     E: core::fmt::Debug,
     F: Fn(V::Error) -> E,
 {
@@ -203,7 +195,7 @@ where
 
 impl<V, E, F> Source for MapError<V, E, F>
 where
-    V: Source + Unpin,
+    V: Source,
     E: core::fmt::Debug,
     F: Fn(V::Error) -> E,
 {
@@ -211,7 +203,7 @@ where
 
 impl<V, E, F> Sink for MapError<V, E, F>
 where
-    V: Sink + Unpin,
+    V: Sink,
     E: core::fmt::Debug,
     F: Fn(V::Error) -> E,
 {

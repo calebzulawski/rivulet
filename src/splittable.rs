@@ -14,7 +14,7 @@ pub use cloneable::Cloneable;
 /// The implementation behind [`Splittable`].
 ///
 /// Unless you are manually implementing a source, you should use [`Splittable`] directly.
-pub unsafe trait SplittableImpl {
+pub unsafe trait SplittableImpl: Unpin {
     /// The streamed type.
     type Item;
 
@@ -71,7 +71,7 @@ pub unsafe trait SplittableImpl {
 /// The implementation behind [`SplittableMut`].
 ///
 /// Unless you are manually implementing a source, you should use [`SplittableMut`] directly.
-pub trait SplittableImplMut: SplittableImpl {
+pub unsafe trait SplittableImplMut: SplittableImpl {
     /// Obtain a mutable view into the stream.
     ///
     /// # Safety
