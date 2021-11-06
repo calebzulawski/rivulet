@@ -23,7 +23,7 @@
             <span class="ident">sink</span>.<span class="ident">grant</span>(<span class="ident">width</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="string">&quot;we got an output error!&quot;</span>),
         )<span class="question-mark">?</span>;
 
-        <span class="comment">// The view could be longer (if available) or shorter (if the stream closed)</span>
+        <span class="comment">// The view could be longer (if extra data is available) or shorter (if the stream closed)</span>
         <span class="kw">let</span> <span class="ident">input</span> <span class="op">=</span> <span class="ident">source</span>.<span class="ident">view</span>();
         <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="ident">sink</span>.<span class="ident">view_mut</span>();
         <span class="kw">if</span> <span class="ident">input</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">width</span> <span class="op">|</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">width</span> {

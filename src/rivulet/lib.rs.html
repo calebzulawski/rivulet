@@ -92,7 +92,7 @@
 <span class="doccomment">//!             sink.grant(width).map_err(|_| &quot;we got an output error!&quot;),</span>
 <span class="doccomment">//!         )?;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//!         // The view could be longer (if available) or shorter (if the stream closed)</span>
+<span class="doccomment">//!         // The view could be longer (if extra data is available) or shorter (if the stream closed)</span>
 <span class="doccomment">//!         let input = source.view();</span>
 <span class="doccomment">//!         let output = sink.view_mut();</span>
 <span class="doccomment">//!         if input.len() &lt; width || output.len() &lt; width {</span>

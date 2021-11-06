@@ -243,14 +243,6 @@
 <span id="243">243</span>
 <span id="244">244</span>
 <span id="245">245</span>
-<span id="246">246</span>
-<span id="247">247</span>
-<span id="248">248</span>
-<span id="249">249</span>
-<span id="250">250</span>
-<span id="251">251</span>
-<span id="252">252</span>
-<span id="253">253</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Views into asynchronous streams.</span>
 
 <span class="kw">use</span> <span class="ident">core</span>::{
@@ -270,7 +262,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Future</span> <span class="kw">for</span> <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">View</span>,
 {
     <span class="kw">type</span> <span class="ident">Output</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">T::Error</span><span class="op">&gt;</span>;
 
@@ -282,7 +274,7 @@
 }
 
 <span class="doccomment">/// Obtain views into asynchronous contiguous-memory streams.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">View</span> {
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">View</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span> {
     <span class="doccomment">/// The streamed type.</span>
     <span class="kw">type</span> <span class="ident">Item</span>;
 
@@ -316,10 +308,7 @@
     <span class="doccomment">/// Create a future that obtains a view of at least `count` elements.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// See [`poll_grant`](`Self::poll_grant`).</span>
-    <span class="kw">fn</span> <span class="ident">grant</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span>
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    {
+    <span class="kw">fn</span> <span class="ident">grant</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="ident">Grant</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="self">Self</span><span class="op">&gt;</span> {
         <span class="ident">Grant</span> {
             <span class="ident">handle</span>: <span class="self">self</span>,
             <span class="ident">count</span>,
@@ -329,18 +318,13 @@
     <span class="doccomment">/// Obtains a view of at least `count` elements, blocking the current thread.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// See [`poll_grant`](`View::poll_grant`).</span>
-    <span class="kw">fn</span> <span class="ident">blocking_grant</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span>
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    {
+    <span class="kw">fn</span> <span class="ident">blocking_grant</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
         <span class="ident">futures::executor::block_on</span>(<span class="self">self</span>.<span class="ident">grant</span>(<span class="ident">count</span>))
     }
 
     <span class="doccomment">/// Maps this view to a new view producing error `E`.</span>
     <span class="kw">fn</span> <span class="ident">map_error</span><span class="op">&lt;</span><span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>(<span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="ident">MapError</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>
     <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-        <span class="ident">E</span>: <span class="ident">core::fmt::Debug</span>,
         <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident"><span class="self">Self</span>::Error</span>) -&gt; <span class="ident">E</span>,
     {
         <span class="ident">MapError</span> {
@@ -351,7 +335,7 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="question-mark">?</span><span class="ident">Sized</span> <span class="op">+</span> <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="kw-2">&amp;mut</span> <span class="ident">S</span> {
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="ident">View</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="kw-2">&amp;mut</span> <span class="ident">S</span> {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">S::Item</span>;
     <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">S::Error</span>;
 
@@ -381,7 +365,7 @@
     <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>];
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="question-mark">?</span><span class="ident">Sized</span> <span class="op">+</span> <span class="ident">ViewMut</span> <span class="op">+</span> <span class="ident">Unpin</span><span class="op">&gt;</span> <span class="ident">ViewMut</span> <span class="kw">for</span> <span class="kw-2">&amp;mut</span> <span class="ident">S</span> {
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>: <span class="ident">ViewMut</span><span class="op">&gt;</span> <span class="ident">ViewMut</span> <span class="kw">for</span> <span class="kw-2">&amp;mut</span> <span class="ident">S</span> {
     <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>] {
         <span class="ident">ViewMut::view_mut</span>(<span class="kw-2">*</span><span class="self">self</span>)
     }
@@ -415,7 +399,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span> <span class="ident">View</span> <span class="kw">for</span> <span class="ident">MapError</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">V</span>: <span class="ident">View</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">V</span>: <span class="ident">View</span>,
     <span class="ident">E</span>: <span class="ident">core::fmt::Debug</span>,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">V::Error</span>) -&gt; <span class="ident">E</span>,
 {
@@ -445,7 +429,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span> <span class="ident">ViewMut</span> <span class="kw">for</span> <span class="ident">MapError</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">V</span>: <span class="ident">ViewMut</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">V</span>: <span class="ident">ViewMut</span>,
     <span class="ident">E</span>: <span class="ident">core::fmt::Debug</span>,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">V::Error</span>) -&gt; <span class="ident">E</span>,
 {
@@ -456,7 +440,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span> <span class="ident">Source</span> <span class="kw">for</span> <span class="ident">MapError</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">V</span>: <span class="ident">Source</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">V</span>: <span class="ident">Source</span>,
     <span class="ident">E</span>: <span class="ident">core::fmt::Debug</span>,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">V::Error</span>) -&gt; <span class="ident">E</span>,
 {
@@ -464,7 +448,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span> <span class="ident">Sink</span> <span class="kw">for</span> <span class="ident">MapError</span><span class="op">&lt;</span><span class="ident">V</span>, <span class="ident">E</span>, <span class="ident">F</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">V</span>: <span class="ident">Sink</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">V</span>: <span class="ident">Sink</span>,
     <span class="ident">E</span>: <span class="ident">core::fmt::Debug</span>,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">V::Error</span>) -&gt; <span class="ident">E</span>,
 {

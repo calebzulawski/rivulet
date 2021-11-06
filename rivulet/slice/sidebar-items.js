@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Slice","Implements all of the stream traits on slices or slice-referenceable types."]]});
+initSidebarItems({"struct":[["Slice","Treats a slice as a stream."],["SliceMut","Treats a mutable slice as a stream."]]});

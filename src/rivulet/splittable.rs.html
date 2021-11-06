@@ -126,7 +126,7 @@
 <span class="doccomment">/// The implementation behind [`Splittable`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Unless you are manually implementing a source, you should use [`Splittable`] directly.</span>
-<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImpl</span> {
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImpl</span>: <span class="ident">Unpin</span> {
     <span class="doccomment">/// The streamed type.</span>
     <span class="kw">type</span> <span class="ident">Item</span>;
 
@@ -183,7 +183,7 @@
 <span class="doccomment">/// The implementation behind [`SplittableMut`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Unless you are manually implementing a source, you should use [`SplittableMut`] directly.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SplittableImplMut</span>: <span class="ident">SplittableImpl</span> {
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImplMut</span>: <span class="ident">SplittableImpl</span> {
     <span class="doccomment">/// Obtain a mutable view into the stream.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Safety</span>
