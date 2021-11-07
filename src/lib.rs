@@ -18,8 +18,8 @@
 //! use futures::future::TryFutureExt;
 //!
 //! async fn reverse_bytes(
-//!     mut source: impl View<Item=u8> + Unpin,
-//!     mut sink: impl ViewMut<Item=u8> + Unpin,
+//!     mut source: impl View<Item=u8>,
+//!     mut sink: impl ViewMut<Item=u8>,
 //!     width: usize
 //! ) -> Result<(), &'static str> {
 //!     loop {
