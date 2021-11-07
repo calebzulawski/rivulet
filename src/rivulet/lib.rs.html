@@ -77,12 +77,12 @@
 <span class="doccomment">//! Let&#39;s create a simple pipeline for byte-reversing.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ```</span>
-<span class="doccomment">//! use rivulet::{Source, Sink};</span>
+<span class="doccomment">//! use rivulet::{View, ViewMut};</span>
 <span class="doccomment">//! use futures::future::TryFutureExt;</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! async fn reverse_bytes(</span>
-<span class="doccomment">//!     mut source: impl Source&lt;Item=u8&gt; + Unpin,</span>
-<span class="doccomment">//!     mut sink: impl Sink&lt;Item=u8&gt; + Unpin,</span>
+<span class="doccomment">//!     mut source: impl View&lt;Item=u8&gt; + Unpin,</span>
+<span class="doccomment">//!     mut sink: impl ViewMut&lt;Item=u8&gt; + Unpin,</span>
 <span class="doccomment">//!     width: usize</span>
 <span class="doccomment">//! ) -&gt; Result&lt;(), &amp;&#39;static str&gt; {</span>
 <span class="doccomment">//!     loop {</span>
