@@ -5,8 +5,8 @@ use rivulet::{
 
 #[test]
 fn slice() {
-    let mut storage: Vec<u8> = (0..100).collect();
-    let mut stream = Slice::new(&mut storage).into_view();
+    let storage: Vec<u8> = (0..100).collect();
+    let mut stream = Slice::new(&storage).into_view();
 
     // There should be an immediate view available
     stream.blocking_grant(0).unwrap();
