@@ -10,7 +10,7 @@ use std::{
     task::{Context, Poll},
 };
 
-/// Implements [`std::io::Read`] for a source.
+/// Implements [`std::io::Read`] for a [`View`].
 #[derive(Copy, Clone, Debug)]
 pub struct Reader<T>(T)
 where
@@ -21,11 +21,11 @@ where
     T: View<Item = u8>,
 {
     /// Create a new `Reader`
-    pub fn new(source: T) -> Self {
-        Self(source)
+    pub fn new(view: T) -> Self {
+        Self(view)
     }
 
-    /// Return the original `View`
+    /// Return the original [`View`]
     pub fn into_inner(self) -> T {
         self.0
     }
@@ -64,13 +64,13 @@ where
     }
 }
 
-/// Implements `futures::io::AsyncRead` for a source.
+/// Implements `futures::io::AsyncRead` for a [`View`].
 #[derive(Copy, Clone, Debug)]
 pub struct AsyncReader<T>
 where
     T: View<Item = u8>,
 {
-    source: T,
+    view: T,
     len: usize,
 }
 
@@ -79,13 +79,13 @@ where
     T: View<Item = u8>,
 {
     /// Create a new `AsyncReader`
-    pub fn new(source: T) -> Self {
-        Self { source, len: 0 }
+    pub fn new(view: T) -> Self {
+        Self { view, len: 0 }
     }
 
-    /// Return the original `Source`
+    /// Return the original [`View`]
     pub fn into_inner(self) -> T {
-        self.source
+        self.view
     }
 }
 
@@ -100,16 +100,16 @@ where
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
         if self.len == 0 {
-            self.len = if buf.len() <= self.source.view().len() {
+            self.len = if buf.len() <= self.view.view().len() {
                 buf.len()
             } else {
-                futures::ready!(Pin::new(&mut self.source).poll_grant(cx, 1))?;
-                buf.len().min(self.source.view().len())
+                futures::ready!(Pin::new(&mut self.view).poll_grant(cx, 1))?;
+                buf.len().min(self.view.view().len())
             };
-            buf[..self.len].copy_from_slice(&self.source.view()[..self.len]);
+            buf[..self.len].copy_from_slice(&self.view.view()[..self.len]);
         }
         let len = self.len;
-        self.source.release(len);
+        self.view.release(len);
         Poll::Ready(Ok(std::mem::take(&mut self.len))) // set len to 0
     }
 }
@@ -123,12 +123,12 @@ where
         mut self: Pin<&'a mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<std::io::Result<&'a [u8]>> {
-        futures::ready!(Pin::new(&mut self.source).poll_grant(cx, 1))?;
-        Poll::Ready(Ok(Pin::into_inner(self).source.view()))
+        futures::ready!(Pin::new(&mut self.view).poll_grant(cx, 1))?;
+        Poll::Ready(Ok(Pin::into_inner(self).view.view()))
     }
 
     fn consume(mut self: Pin<&mut Self>, amt: usize) {
-        self.source.release(amt);
+        self.view.release(amt);
     }
 }
 

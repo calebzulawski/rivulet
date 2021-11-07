@@ -7,7 +7,7 @@ use std::{
     task::{Context, Poll},
 };
 
-/// A source returned by [`Splittable::into_source`](`super::Splittable::into_source`).
+/// A view returned by [`Splittable::into_view`](`super::Splittable::into_view`).
 pub struct View<T>
 where
     T: Splittable,
@@ -46,7 +46,7 @@ where
     type Error = T::Error;
 
     fn view(&self) -> &[Self::Item] {
-        // we have unique ownership of the source, so this doesn't overlap with any other views
+        // Safety: we have unique ownership of the view, so this doesn't overlap with any other views
         unsafe { self.splittable.view(self.head, self.len) }
     }
 
@@ -91,7 +91,7 @@ where
     T: SplittableMut,
 {
     fn view_mut(&mut self) -> &mut [Self::Item] {
-        // we have unique ownership of the source, so this doesn't overlap with any other views
+        // Safety: we have unique ownership of the view, so this doesn't overlap with any other views
         unsafe { self.splittable.view_mut(self.head, self.len) }
     }
 }

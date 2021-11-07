@@ -62,10 +62,10 @@ impl Waker {
     }
 }
 
-/// A source returned by
-/// [`Splittable::into_cloneable_source`](`super::Splittable::into_cloneable_source`).
+/// A view returned by
+/// [`Splittable::into_cloneable_view`](`super::Splittable::into_cloneable_view`).
 ///
-/// This source may be cloned to be used with other readers.  The cloned source is initialized with
+/// This view may be cloned to be used with other readers.  The cloned view is initialized with
 /// the same view of the stream.
 pub struct Cloneable<T>
 where
@@ -134,7 +134,7 @@ where
     type Error = T::Error;
 
     fn view(&self) -> &[Self::Item] {
-        // we have unique ownership of the source, so this doesn't overlap with any other views
+        // Safety: there are no mutable views
         unsafe { self.splittable.view(self.head, self.len) }
     }
 
