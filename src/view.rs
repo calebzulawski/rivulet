@@ -8,9 +8,7 @@ use core::{
 use pin_project::pin_project;
 
 /// Future produced by [`View::grant`].
-#[pin_project]
 pub struct Grant<'a, T> {
-    #[pin]
     handle: &'a mut T,
     count: usize,
 }
@@ -21,10 +19,9 @@ where
 {
     type Output = Result<(), T::Error>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let count = self.count;
-        let pinned = self.project();
-        pinned.handle.poll_grant(cx, count)
+        Pin::new(&mut self.handle).poll_grant(cx, count)
     }
 }
 
@@ -126,20 +123,11 @@ impl<S: ViewMut> ViewMut for &mut S {
     }
 }
 
-/// A marker trait that indicates this view is a source of data.
-///
-/// A newly granted view will read data from the stream.
-pub trait Source: View {}
-
-/// A marker trait that indicates this view is a sink of data.
-///
-/// Any data in a released view is committed to the stream.
-pub trait Sink: ViewMut {}
-
 /// An error-mapped view produced by [`View::map_error`].
 #[pin_project]
 #[derive(Debug)]
 pub struct MapError<V, E, F> {
+    #[pin]
     view: V,
     map: F,
     _error: core::marker::PhantomData<E>,
@@ -172,9 +160,7 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         let pinned = self.project();
         let f = pinned.map;
-        Pin::new(pinned.view)
-            .poll_grant(cx, count)
-            .map(|r| r.map_err(f))
+        pinned.view.poll_grant(cx, count).map(|r| r.map_err(f))
     }
 
     fn release(&mut self, count: usize) {
@@ -191,22 +177,6 @@ where
     fn view_mut(&mut self) -> &mut [Self::Item] {
         self.view.view_mut()
     }
-}
-
-impl<V, E, F> Source for MapError<V, E, F>
-where
-    V: Source,
-    E: core::fmt::Debug,
-    F: Fn(V::Error) -> E,
-{
-}
-
-impl<V, E, F> Sink for MapError<V, E, F>
-where
-    V: Sink,
-    E: core::fmt::Debug,
-    F: Fn(V::Error) -> E,
-{
 }
 
 impl<V, E, F> Copy for MapError<V, E, F>

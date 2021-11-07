@@ -2,40 +2,39 @@
 #![cfg_attr(docsrs, doc(cfg(all(feature = "std"))))]
 //! Utilities for working with [`std::io`].
 
-use crate::{Sink, Source};
+use crate::{View, ViewMut};
 use futures::io::{AsyncBufRead, AsyncRead, AsyncWrite};
-use pin_project::pin_project;
-use std::io::{BufRead, Read, Write};
-use std::marker::Unpin;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    io::{BufRead, Read, Write},
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 /// Implements [`std::io::Read`] for a source.
-#[pin_project]
 #[derive(Copy, Clone, Debug)]
-pub struct Reader<S>(#[pin] S)
+pub struct Reader<T>(T)
 where
-    S: Source<Item = u8> + Unpin;
+    T: View<Item = u8>;
 
-impl<S> Reader<S>
+impl<T> Reader<T>
 where
-    S: Source<Item = u8> + Unpin,
+    T: View<Item = u8>,
 {
     /// Create a new `Reader`
-    pub fn new(source: S) -> Self {
+    pub fn new(source: T) -> Self {
         Self(source)
     }
 
-    /// Return the original `Source`
-    pub fn into_inner(self) -> S {
+    /// Return the original `View`
+    pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl<S> Read for Reader<S>
+impl<T> Read for Reader<T>
 where
-    S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: View<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
@@ -50,10 +49,10 @@ where
     }
 }
 
-impl<S> BufRead for Reader<S>
+impl<T> BufRead for Reader<T>
 where
-    S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: View<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.0.blocking_grant(1)?;
@@ -66,103 +65,98 @@ where
 }
 
 /// Implements `futures::io::AsyncRead` for a source.
-#[pin_project]
 #[derive(Copy, Clone, Debug)]
-pub struct AsyncReader<S>
+pub struct AsyncReader<T>
 where
-    S: Source<Item = u8> + Unpin,
+    T: View<Item = u8>,
 {
-    #[pin]
-    source: S,
+    source: T,
     len: usize,
 }
 
-impl<S> AsyncReader<S>
+impl<T> AsyncReader<T>
 where
-    S: Source<Item = u8> + Unpin,
+    T: View<Item = u8>,
 {
     /// Create a new `AsyncReader`
-    pub fn new(source: S) -> Self {
+    pub fn new(source: T) -> Self {
         Self { source, len: 0 }
     }
 
     /// Return the original `Source`
-    pub fn into_inner(self) -> S {
+    pub fn into_inner(self) -> T {
         self.source
     }
 }
 
-impl<S> AsyncRead for AsyncReader<S>
+impl<T> AsyncRead for AsyncReader<T>
 where
-    S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: View<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        let mut pinned = self.project();
-        if *pinned.len == 0 {
-            *pinned.len = if buf.len() <= pinned.source.view().len() {
+        if self.len == 0 {
+            self.len = if buf.len() <= self.source.view().len() {
                 buf.len()
             } else {
-                futures::ready!(pinned.source.as_mut().poll_grant(cx, 1))?;
-                buf.len().min(pinned.source.view().len())
+                futures::ready!(Pin::new(&mut self.source).poll_grant(cx, 1))?;
+                buf.len().min(self.source.view().len())
             };
-            buf[..*pinned.len].copy_from_slice(&pinned.source.view()[..*pinned.len]);
+            buf[..self.len].copy_from_slice(&self.source.view()[..self.len]);
         }
-        pinned.source.as_mut().release(*pinned.len);
-        Poll::Ready(Ok(std::mem::take(pinned.len))) // set len to 0
+        let len = self.len;
+        self.source.release(len);
+        Poll::Ready(Ok(std::mem::take(&mut self.len))) // set len to 0
     }
 }
 
-impl<S> AsyncBufRead for AsyncReader<S>
+impl<T> AsyncBufRead for AsyncReader<T>
 where
-    S: Source<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: View<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn poll_fill_buf<'a>(
-        self: Pin<&'a mut Self>,
+        mut self: Pin<&'a mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<std::io::Result<&'a [u8]>> {
-        let mut pinned = self.project();
-        futures::ready!(pinned.source.as_mut().poll_grant(cx, 1))?;
-        Poll::Ready(Ok(Pin::into_inner(pinned.source).view()))
+        futures::ready!(Pin::new(&mut self.source).poll_grant(cx, 1))?;
+        Poll::Ready(Ok(Pin::into_inner(self).source.view()))
     }
 
-    fn consume(self: Pin<&mut Self>, amt: usize) {
-        let mut pinned = self.project();
-        pinned.source.as_mut().release(amt);
+    fn consume(mut self: Pin<&mut Self>, amt: usize) {
+        self.source.release(amt);
     }
 }
 
-/// Implements [`std::io::Write`] for a sink.
-#[pin_project]
+/// Implements [`std::io::Write`] for a [`ViewMut`].
 #[derive(Copy, Clone, Debug)]
-pub struct Writer<S>(#[pin] S)
+pub struct Writer<T>(T)
 where
-    S: Sink<Item = u8> + Unpin;
+    T: ViewMut<Item = u8>;
 
-impl<S> Writer<S>
+impl<T> Writer<T>
 where
-    S: Sink<Item = u8> + Unpin,
+    T: ViewMut<Item = u8>,
 {
     /// Create a new `Writer`
-    pub fn new(sink: S) -> Self {
+    pub fn new(sink: T) -> Self {
         Self(sink)
     }
 
-    /// Return the original `Sink`
-    pub fn into_inner(self) -> S {
+    /// Return the original [`ViewMut`]
+    pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl<S> Write for Writer<S>
+impl<T> Write for Writer<T>
 where
-    S: Sink<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: ViewMut<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let len = if buf.len() <= self.0.view().len() {
@@ -181,55 +175,54 @@ where
     }
 }
 
-/// Implements `futures::io::AsyncWrite` for a sink.
-#[pin_project]
+/// Implements `futures::io::AsyncWrite` for a [`ViewMut`].
 #[derive(Copy, Clone, Debug)]
-pub struct AsyncWriter<S>
+pub struct AsyncWriter<T>
 where
-    S: Sink<Item = u8> + Unpin,
+    T: ViewMut<Item = u8>,
 {
-    #[pin]
-    sink: S,
+    sink: T,
     len: usize,
 }
 
-impl<S> AsyncWriter<S>
+impl<T> AsyncWriter<T>
 where
-    S: Sink<Item = u8> + Unpin,
+    T: ViewMut<Item = u8>,
 {
     /// Create a new `AsyncWriter`
-    pub fn new(sink: S) -> Self {
+    pub fn new(sink: T) -> Self {
         Self { sink, len: 0 }
     }
 
-    /// Return the original `Sink`
-    pub fn into_inner(self) -> S {
+    /// Return the original [`ViewMut`]
+    pub fn into_inner(self) -> T {
         self.sink
     }
 }
 
-impl<S> AsyncWrite for AsyncWriter<S>
+impl<T> AsyncWrite for AsyncWriter<T>
 where
-    S: Sink<Item = u8> + Unpin,
-    std::io::Error: From<S::Error>,
+    T: ViewMut<Item = u8>,
+    std::io::Error: From<T::Error>,
 {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        let mut pinned = self.project();
-        if *pinned.len == 0 {
-            *pinned.len = if buf.len() <= pinned.sink.view().len() {
+        if self.len == 0 {
+            self.len = if buf.len() <= self.sink.view().len() {
                 buf.len()
             } else {
-                futures::ready!(pinned.sink.as_mut().poll_grant(cx, 1))?;
-                buf.len().min(pinned.sink.view().len())
+                futures::ready!(Pin::new(&mut self.sink).poll_grant(cx, 1))?;
+                buf.len().min(self.sink.view().len())
             };
-            pinned.sink.view_mut()[..*pinned.len].copy_from_slice(&buf[..*pinned.len]);
+            let len = self.len;
+            self.sink.view_mut()[..len].copy_from_slice(&buf[..len]);
         }
-        pinned.sink.as_mut().release(*pinned.len);
-        Poll::Ready(Ok(std::mem::take(pinned.len))) // set to 0
+        let len = self.len;
+        self.sink.release(len);
+        Poll::Ready(Ok(std::mem::take(&mut self.len))) // set to 0
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {

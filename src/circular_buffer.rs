@@ -233,8 +233,6 @@ impl<T> ViewMut for Sink<T> {
     }
 }
 
-impl<T> crate::Sink for Sink<T> {}
-
 /// The reader of a circular buffer.
 ///
 /// Writes made to the associated [`Sink`] are made available to this.

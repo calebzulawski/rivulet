@@ -172,5 +172,3 @@ where
         }
     }
 }
-
-impl<T> crate::Source for Cloneable<T> where T: Splittable {}

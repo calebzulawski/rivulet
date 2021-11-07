@@ -1,19 +1,19 @@
-//! Streams that can be split into multiple sources.
+//! Streams that can be split into multiple views.
 
 use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
 
-mod source;
-pub use source::Source;
+mod view;
+pub use view::View;
 
 mod cloneable;
 pub use cloneable::Cloneable;
 
 /// The implementation behind [`Splittable`].
 ///
-/// Unless you are manually implementing a source, you should use [`Splittable`] directly.
+/// Unless you are manually implementing a view, you should use [`Splittable`] directly.
 pub unsafe trait SplittableImpl: Unpin {
     /// The streamed type.
     type Item;
@@ -70,7 +70,7 @@ pub unsafe trait SplittableImpl: Unpin {
 
 /// The implementation behind [`SplittableMut`].
 ///
-/// Unless you are manually implementing a source, you should use [`SplittableMut`] directly.
+/// Unless you are manually implementing a view, you should use [`SplittableMut`] directly.
 pub unsafe trait SplittableImplMut: SplittableImpl {
     /// Obtain a mutable view into the stream.
     ///
@@ -86,18 +86,18 @@ pub unsafe trait SplittableImplMut: SplittableImpl {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item];
 }
 
-/// A source that can be split for use with multiple readers.
+/// A view that can be split for use with multiple readers.
 pub trait Splittable: SplittableImpl {
-    /// Create a source for a single reader.
-    fn into_source(self) -> Source<Self>
+    /// Create a view for a single reader.
+    fn into_view(self) -> View<Self>
     where
         Self: Sized,
     {
-        Source::new(self)
+        View::new(self)
     }
 
-    /// Create a source that implements `Clone`.
-    fn into_cloneable_source(self) -> Cloneable<Self>
+    /// Create a view that implements `Clone`.
+    fn into_cloneable_view(self) -> Cloneable<Self>
     where
         Self: Sized,
     {
@@ -105,7 +105,7 @@ pub trait Splittable: SplittableImpl {
     }
 }
 
-/// A mutable source that can be split for use with multiple readers.
+/// A mutable view that can be split for use with multiple readers.
 pub trait SplittableMut: Splittable + SplittableImplMut {}
 
 impl<T> Splittable for T where T: SplittableImpl {}

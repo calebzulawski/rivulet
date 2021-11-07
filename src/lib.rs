@@ -60,4 +60,4 @@ pub mod view;
 
 pub use circular_buffer::circular_buffer;
 pub use splittable::Splittable;
-pub use view::{Sink, Source, View, ViewMut};
+pub use view::{View, ViewMut};

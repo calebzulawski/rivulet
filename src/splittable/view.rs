@@ -1,6 +1,5 @@
 use super::{Splittable, SplittableMut};
 use futures::task::AtomicWaker;
-use pin_project::pin_project;
 use std::{
     convert::TryInto,
     pin::Pin,
@@ -9,19 +8,17 @@ use std::{
 };
 
 /// A source returned by [`Splittable::into_source`](`super::Splittable::into_source`).
-#[pin_project]
-pub struct Source<T>
+pub struct View<T>
 where
     T: Splittable,
 {
-    #[pin]
     splittable: T,
     waker: Arc<AtomicWaker>,
     head: u64,
     len: usize,
 }
 
-impl<T> Source<T>
+impl<T> View<T>
 where
     T: Splittable,
 {
@@ -41,7 +38,7 @@ where
     }
 }
 
-impl<T> crate::View for Source<T>
+impl<T> crate::View for View<T>
 where
     T: Splittable,
 {
@@ -54,19 +51,18 @@ where
     }
 
     fn poll_grant(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context,
         count: usize,
     ) -> Poll<Result<(), Self::Error>> {
-        let pinned = self.project();
-        match pinned.splittable.as_ref().poll_available(
+        match Pin::new(&self.splittable).poll_available(
             cx,
-            |waker| pinned.waker.register(waker),
-            *pinned.head,
+            |waker| self.waker.register(waker),
+            self.head,
             count,
         ) {
             Poll::Ready(Ok(len)) => {
-                *pinned.len = len;
+                self.len = len;
                 Poll::Ready(Ok(()))
             }
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
@@ -90,7 +86,7 @@ where
     }
 }
 
-impl<T> crate::ViewMut for Source<T>
+impl<T> crate::ViewMut for View<T>
 where
     T: SplittableMut,
 {
@@ -99,5 +95,3 @@ where
         unsafe { self.splittable.view_mut(self.head, self.len) }
     }
 }
-
-impl<T> crate::Source for Source<T> where T: Splittable {}

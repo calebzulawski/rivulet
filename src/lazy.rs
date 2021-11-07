@@ -1,6 +1,6 @@
 //! Lazy-initialized streams.
 
-use crate::{Sink, Source, View, ViewMut};
+use crate::{View, ViewMut};
 use core::{
     pin::Pin,
     sync::atomic::AtomicBool,
@@ -44,7 +44,7 @@ impl<V> Lazy<V, Box<dyn FnOnce() -> V>> {
 
 impl<V, F> View for Lazy<V, F>
 where
-    V: View + Unpin,
+    V: View,
     F: FnOnce() -> V,
 {
     type Item = V::Item;
@@ -86,7 +86,7 @@ where
 
 impl<V, F> ViewMut for Lazy<V, F>
 where
-    V: ViewMut + Unpin,
+    V: ViewMut,
     F: FnOnce() -> V,
 {
     fn view_mut(&mut self) -> &mut [Self::Item] {
@@ -96,20 +96,6 @@ where
             &mut []
         }
     }
-}
-
-impl<V, F> Sink for Lazy<V, F>
-where
-    V: Sink + Unpin,
-    F: FnOnce() -> V,
-{
-}
-
-impl<V, F> Source for Lazy<V, F>
-where
-    V: Source + Unpin,
-    F: FnOnce() -> V,
-{
 }
 
 #[cfg(feature = "std")]
@@ -166,7 +152,7 @@ mod channel {
 
     impl<Sink, Source, F> View for LazyChannelSink<Sink, Source, F>
     where
-        Sink: crate::View + Unpin,
+        Sink: crate::View,
         F: FnOnce() -> (Sink, Source),
     {
         type Item = Sink::Item;
@@ -208,7 +194,7 @@ mod channel {
 
     impl<Sink, Source, F> ViewMut for LazyChannelSink<Sink, Source, F>
     where
-        Sink: ViewMut + Unpin,
+        Sink: ViewMut,
         F: FnOnce() -> (Sink, Source),
     {
         fn view_mut(&mut self) -> &mut [Self::Item] {
@@ -218,20 +204,6 @@ mod channel {
                 &mut []
             }
         }
-    }
-
-    impl<Sink, Source, F> crate::Sink for LazyChannelSink<Sink, Source, F>
-    where
-        Sink: crate::Sink + Unpin,
-        F: FnOnce() -> (Sink, Source),
-    {
-    }
-
-    impl<Sink, Source, F> crate::Source for LazyChannelSink<Sink, Source, F>
-    where
-        Sink: crate::Source + Unpin,
-        F: FnOnce() -> (Sink, Source),
-    {
     }
 
     /// A source created by [`lazy_channel`].
@@ -244,7 +216,7 @@ mod channel {
 
     impl<Sink, Source, F> View for LazyChannelSource<Sink, Source, F>
     where
-        Source: View + Unpin,
+        Source: View,
         F: FnOnce() -> (Sink, Source),
     {
         type Item = Source::Item;
@@ -288,7 +260,7 @@ mod channel {
 
     impl<Sink, Source, F> ViewMut for LazyChannelSource<Sink, Source, F>
     where
-        Source: ViewMut + Unpin,
+        Source: ViewMut,
         F: FnOnce() -> (Sink, Source),
     {
         fn view_mut(&mut self) -> &mut [Self::Item] {
@@ -298,20 +270,6 @@ mod channel {
                 &mut []
             }
         }
-    }
-
-    impl<Sink, Source, F> crate::Sink for LazyChannelSource<Sink, Source, F>
-    where
-        Source: crate::Sink + Unpin,
-        F: FnOnce() -> (Sink, Source),
-    {
-    }
-
-    impl<Sink, Source, F> crate::Source for LazyChannelSource<Sink, Source, F>
-    where
-        Source: crate::Source + Unpin,
-        F: FnOnce() -> (Sink, Source),
-    {
     }
 
     /// Create a lazy-initialized channel.
