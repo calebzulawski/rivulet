@@ -110,22 +110,22 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
-</pre><pre class="rust"><code><span class="doccomment">//! Streams that can be split into multiple sources.</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Streams that can be split into multiple views.</span>
 
 <span class="kw">use</span> <span class="ident">core</span>::{
     <span class="ident">pin::Pin</span>,
     <span class="ident">task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>, <span class="ident">Waker</span>},
 };
 
-<span class="kw">mod</span> <span class="ident">source</span>;
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">source::Source</span>;
+<span class="kw">mod</span> <span class="ident">view</span>;
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">view::View</span>;
 
 <span class="kw">mod</span> <span class="ident">cloneable</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">cloneable::Cloneable</span>;
 
 <span class="doccomment">/// The implementation behind [`Splittable`].</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// Unless you are manually implementing a source, you should use [`Splittable`] directly.</span>
+<span class="doccomment">/// Unless you are manually implementing a view, you should use [`Splittable`] directly.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImpl</span>: <span class="ident">Unpin</span> {
     <span class="doccomment">/// The streamed type.</span>
     <span class="kw">type</span> <span class="ident">Item</span>;
@@ -182,7 +182,7 @@
 
 <span class="doccomment">/// The implementation behind [`SplittableMut`].</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// Unless you are manually implementing a source, you should use [`SplittableMut`] directly.</span>
+<span class="doccomment">/// Unless you are manually implementing a view, you should use [`SplittableMut`] directly.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImplMut</span>: <span class="ident">SplittableImpl</span> {
     <span class="doccomment">/// Obtain a mutable view into the stream.</span>
     <span class="doccomment">///</span>
@@ -198,18 +198,18 @@
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="ident">u64</span>, <span class="ident">len</span>: <span class="ident">usize</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>];
 }
 
-<span class="doccomment">/// A source that can be split for use with multiple readers.</span>
+<span class="doccomment">/// A view that can be split for use with multiple readers.</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Splittable</span>: <span class="ident">SplittableImpl</span> {
-    <span class="doccomment">/// Create a source for a single reader.</span>
-    <span class="kw">fn</span> <span class="ident">into_source</span>(<span class="self">self</span>) -&gt; <span class="ident">Source</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>
+    <span class="doccomment">/// Create a view for a single reader.</span>
+    <span class="kw">fn</span> <span class="ident">into_view</span>(<span class="self">self</span>) -&gt; <span class="ident">View</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span>,
     {
-        <span class="ident">Source::new</span>(<span class="self">self</span>)
+        <span class="ident">View::new</span>(<span class="self">self</span>)
     }
 
-    <span class="doccomment">/// Create a source that implements `Clone`.</span>
-    <span class="kw">fn</span> <span class="ident">into_cloneable_source</span>(<span class="self">self</span>) -&gt; <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>
+    <span class="doccomment">/// Create a view that implements `Clone`.</span>
+    <span class="kw">fn</span> <span class="ident">into_cloneable_view</span>(<span class="self">self</span>) -&gt; <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span>,
     {
@@ -217,7 +217,7 @@
     }
 }
 
-<span class="doccomment">/// A mutable source that can be split for use with multiple readers.</span>
+<span class="doccomment">/// A mutable view that can be split for use with multiple readers.</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SplittableMut</span>: <span class="ident">Splittable</span> <span class="op">+</span> <span class="ident">SplittableImplMut</span> {}
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Splittable</span> <span class="kw">for</span> <span class="ident">T</span> <span class="kw">where</span> <span class="ident">T</span>: <span class="ident">SplittableImpl</span> {}

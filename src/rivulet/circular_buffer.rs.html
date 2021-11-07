@@ -345,8 +345,6 @@
 <span id="345">345</span>
 <span id="346">346</span>
 <span id="347">347</span>
-<span id="348">348</span>
-<span id="349">349</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))]</span>
 <span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))))]</span>
 <span class="doccomment">//! An asynchronous copy-free circular buffer.</span>
@@ -581,8 +579,6 @@
         <span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">buffer</span>.<span class="ident">range_mut</span>(<span class="self">self</span>.<span class="ident">tail</span>, <span class="self">self</span>.<span class="ident">available</span>) }
     }
 }
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident"><span class="kw">crate</span>::Sink</span> <span class="kw">for</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {}
 
 <span class="doccomment">/// The reader of a circular buffer.</span>
 <span class="doccomment">///</span>

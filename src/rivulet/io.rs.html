@@ -233,51 +233,43 @@
 <span id="233">233</span>
 <span id="234">234</span>
 <span id="235">235</span>
-<span id="236">236</span>
-<span id="237">237</span>
-<span id="238">238</span>
-<span id="239">239</span>
-<span id="240">240</span>
-<span id="241">241</span>
-<span id="242">242</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))]</span>
 <span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>))))]</span>
 <span class="doccomment">//! Utilities for working with [`std::io`].</span>
 
-<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Sink</span>, <span class="ident">Source</span>};
+<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">View</span>, <span class="ident">ViewMut</span>};
 <span class="kw">use</span> <span class="ident">futures::io</span>::{<span class="ident">AsyncBufRead</span>, <span class="ident">AsyncRead</span>, <span class="ident">AsyncWrite</span>};
-<span class="kw">use</span> <span class="ident">pin_project::pin_project</span>;
-<span class="kw">use</span> <span class="ident">std::io</span>::{<span class="ident">BufRead</span>, <span class="ident">Read</span>, <span class="ident">Write</span>};
-<span class="kw">use</span> <span class="ident">std::marker::Unpin</span>;
-<span class="kw">use</span> <span class="ident">std::pin::Pin</span>;
-<span class="kw">use</span> <span class="ident">std::task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>};
+<span class="kw">use</span> <span class="ident">std</span>::{
+    <span class="ident">io</span>::{<span class="ident">BufRead</span>, <span class="ident">Read</span>, <span class="ident">Write</span>},
+    <span class="ident">pin::Pin</span>,
+    <span class="ident">task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>},
+};
 
 <span class="doccomment">/// Implements [`std::io::Read`] for a source.</span>
-<span class="attribute">#[<span class="ident">pin_project</span>]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>(<span class="attribute">#[<span class="ident">pin</span>]</span> <span class="ident">S</span>)
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">T</span>)
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>;
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>;
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
     <span class="doccomment">/// Create a new `Reader`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">source</span>: <span class="ident">S</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">source</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span>(<span class="ident">source</span>)
     }
 
-    <span class="doccomment">/// Return the original `Source`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">S</span> {
+    <span class="doccomment">/// Return the original `View`</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">T</span> {
         <span class="self">self</span>.<span class="number">0</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Read</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Read</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">read</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">buf</span>: <span class="kw-2">&amp;mut</span> [<span class="ident">u8</span>]) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
@@ -292,10 +284,10 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">BufRead</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">BufRead</span> <span class="kw">for</span> <span class="ident">Reader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">fill_buf</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">u8</span>]<span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">blocking_grant</span>(<span class="number">1</span>)<span class="question-mark">?</span>;
@@ -308,103 +300,98 @@
 }
 
 <span class="doccomment">/// Implements `futures::io::AsyncRead` for a source.</span>
-<span class="attribute">#[<span class="ident">pin_project</span>]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
-    <span class="attribute">#[<span class="ident">pin</span>]</span>
-    <span class="ident">source</span>: <span class="ident">S</span>,
+    <span class="ident">source</span>: <span class="ident">T</span>,
     <span class="ident">len</span>: <span class="ident">usize</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
     <span class="doccomment">/// Create a new `AsyncReader`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">source</span>: <span class="ident">S</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">source</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> { <span class="ident">source</span>, <span class="ident">len</span>: <span class="number">0</span> }
     }
 
     <span class="doccomment">/// Return the original `Source`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">S</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">T</span> {
         <span class="self">self</span>.<span class="ident">source</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">AsyncRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_read</span>(
-        <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
         <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
         <span class="ident">buf</span>: <span class="kw-2">&amp;mut</span> [<span class="ident">u8</span>],
     ) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-        <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span> <span class="op">==</span> <span class="number">0</span> {
-            <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">len</span> <span class="op">==</span> <span class="number">0</span> {
+            <span class="self">self</span>.<span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">source</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
                 <span class="ident">buf</span>.<span class="ident">len</span>()
             } <span class="kw">else</span> {
-                <span class="macro">futures::ready!</span>(<span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
-                <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">view</span>().<span class="ident">len</span>())
+                <span class="macro">futures::ready!</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">source</span>).<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
+                <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="self">self</span>.<span class="ident">source</span>.<span class="ident">view</span>().<span class="ident">len</span>())
             };
-            <span class="ident">buf</span>[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">view</span>()[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>]);
+            <span class="ident">buf</span>[..<span class="self">self</span>.<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">source</span>.<span class="ident">view</span>()[..<span class="self">self</span>.<span class="ident">len</span>]);
         }
-        <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>);
-        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="ident">pinned</span>.<span class="ident">len</span>))) <span class="comment">// set len to 0</span>
+        <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">len</span>;
+        <span class="self">self</span>.<span class="ident">source</span>.<span class="ident">release</span>(<span class="ident">len</span>);
+        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">len</span>))) <span class="comment">// set len to 0</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncBufRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">AsyncBufRead</span> <span class="kw">for</span> <span class="ident">AsyncReader</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Source</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_fill_buf</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
-        <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
         <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
     ) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> [<span class="ident">u8</span>]<span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-        <span class="macro">futures::ready!</span>(<span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
-        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">Pin::into_inner</span>(<span class="ident">pinned</span>.<span class="ident">source</span>).<span class="ident">view</span>()))
+        <span class="macro">futures::ready!</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">source</span>).<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
+        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">Pin::into_inner</span>(<span class="self">self</span>).<span class="ident">source</span>.<span class="ident">view</span>()))
     }
 
-    <span class="kw">fn</span> <span class="ident">consume</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">amt</span>: <span class="ident">usize</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-        <span class="ident">pinned</span>.<span class="ident">source</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="ident">amt</span>);
+    <span class="kw">fn</span> <span class="ident">consume</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">amt</span>: <span class="ident">usize</span>) {
+        <span class="self">self</span>.<span class="ident">source</span>.<span class="ident">release</span>(<span class="ident">amt</span>);
     }
 }
 
-<span class="doccomment">/// Implements [`std::io::Write`] for a sink.</span>
-<span class="attribute">#[<span class="ident">pin_project</span>]</span>
+<span class="doccomment">/// Implements [`std::io::Write`] for a [`ViewMut`].</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>(<span class="attribute">#[<span class="ident">pin</span>]</span> <span class="ident">S</span>)
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">T</span>)
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>;
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>;
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
     <span class="doccomment">/// Create a new `Writer`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">sink</span>: <span class="ident">S</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">sink</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span>(<span class="ident">sink</span>)
     }
 
-    <span class="doccomment">/// Return the original `Sink`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">S</span> {
+    <span class="doccomment">/// Return the original [`ViewMut`]</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">T</span> {
         <span class="self">self</span>.<span class="number">0</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Write</span> <span class="kw">for</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Write</span> <span class="kw">for</span> <span class="ident">Writer</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">write</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">buf</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
@@ -423,55 +410,54 @@
     }
 }
 
-<span class="doccomment">/// Implements `futures::io::AsyncWrite` for a sink.</span>
-<span class="attribute">#[<span class="ident">pin_project</span>]</span>
+<span class="doccomment">/// Implements `futures::io::AsyncWrite` for a [`ViewMut`].</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
-    <span class="attribute">#[<span class="ident">pin</span>]</span>
-    <span class="ident">sink</span>: <span class="ident">S</span>,
+    <span class="ident">sink</span>: <span class="ident">T</span>,
     <span class="ident">len</span>: <span class="ident">usize</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
 {
     <span class="doccomment">/// Create a new `AsyncWriter`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">sink</span>: <span class="ident">S</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">sink</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> { <span class="ident">sink</span>, <span class="ident">len</span>: <span class="number">0</span> }
     }
 
-    <span class="doccomment">/// Return the original `Sink`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">S</span> {
+    <span class="doccomment">/// Return the original [`ViewMut`]</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">into_inner</span>(<span class="self">self</span>) -&gt; <span class="ident">T</span> {
         <span class="self">self</span>.<span class="ident">sink</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="ident">AsyncWrite</span> <span class="kw">for</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">AsyncWrite</span> <span class="kw">for</span> <span class="ident">AsyncWriter</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">S::Error</span><span class="op">&gt;</span>,
+    <span class="ident">T</span>: <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">u8</span><span class="op">&gt;</span>,
+    <span class="ident">std::io::Error</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="ident">T::Error</span><span class="op">&gt;</span>,
 {
     <span class="kw">fn</span> <span class="ident">poll_write</span>(
-        <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>,
         <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
         <span class="ident">buf</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>],
     ) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="ident">std::io::Result</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pinned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">project</span>();
-        <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span> <span class="op">==</span> <span class="number">0</span> {
-            <span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">len</span> <span class="op">==</span> <span class="number">0</span> {
+            <span class="self">self</span>.<span class="ident">len</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">buf</span>.<span class="ident">len</span>() <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">sink</span>.<span class="ident">view</span>().<span class="ident">len</span>() {
                 <span class="ident">buf</span>.<span class="ident">len</span>()
             } <span class="kw">else</span> {
-                <span class="macro">futures::ready!</span>(<span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">as_mut</span>().<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
-                <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">view</span>().<span class="ident">len</span>())
+                <span class="macro">futures::ready!</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>).<span class="ident">poll_grant</span>(<span class="ident">cx</span>, <span class="number">1</span>))<span class="question-mark">?</span>;
+                <span class="ident">buf</span>.<span class="ident">len</span>().<span class="ident">min</span>(<span class="self">self</span>.<span class="ident">sink</span>.<span class="ident">view</span>().<span class="ident">len</span>())
             };
-            <span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">view_mut</span>()[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>[..<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>]);
+            <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">len</span>;
+            <span class="self">self</span>.<span class="ident">sink</span>.<span class="ident">view_mut</span>()[..<span class="ident">len</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>[..<span class="ident">len</span>]);
         }
-        <span class="ident">pinned</span>.<span class="ident">sink</span>.<span class="ident">as_mut</span>().<span class="ident">release</span>(<span class="kw-2">*</span><span class="ident">pinned</span>.<span class="ident">len</span>);
-        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="ident">pinned</span>.<span class="ident">len</span>))) <span class="comment">// set to 0</span>
+        <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">len</span>;
+        <span class="self">self</span>.<span class="ident">sink</span>.<span class="ident">release</span>(<span class="ident">len</span>);
+        <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">std::mem::take</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">len</span>))) <span class="comment">// set to 0</span>
     }
 
     <span class="kw">fn</span> <span class="ident">poll_flush</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">_cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span> {
