@@ -1,10 +1,10 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{circular_buffer, Sink, Source, Splittable};
+use rivulet::{circular_buffer, Splittable, View, ViewMut};
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
 
-async fn write<T: Sink<Item = i64> + Send + Unpin>(mut sink: T, block: usize, count: usize) -> u64 {
+async fn write<T: ViewMut<Item = i64> + Send>(mut sink: T, block: usize, count: usize) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     for _ in 0..count {
@@ -18,7 +18,7 @@ async fn write<T: Sink<Item = i64> + Send + Unpin>(mut sink: T, block: usize, co
     hasher.finish()
 }
 
-async fn read<T: Source<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
+async fn read<T: View<Item = i64> + Send>(mut source: T) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     loop {
@@ -40,7 +40,7 @@ async fn single_reader_buffer_integrity() {
     let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
 
     let write_hash = tokio::spawn(write(sink, 500, 400));
-    let read_hash = tokio::spawn(read(source.into_source()));
+    let read_hash = tokio::spawn(read(source.into_view()));
 
     let (write_hash, read_hash) = futures::future::join(write_hash, read_hash).await;
     assert_eq!(write_hash.unwrap(), read_hash.unwrap());
@@ -49,7 +49,7 @@ async fn single_reader_buffer_integrity() {
 #[tokio::test]
 async fn multiple_reader_buffer_integrity() {
     let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
-    let source = source.into_cloneable_source();
+    let source = source.into_cloneable_view();
 
     let write_hash = tokio::spawn(write(sink, 500, 400));
     let read_hashes = (0..10)

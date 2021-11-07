@@ -14,12 +14,12 @@
 //! Let's create a simple pipeline for byte-reversing.
 //!
 //! ```
-//! use rivulet::{Source, Sink};
+//! use rivulet::{View, ViewMut};
 //! use futures::future::TryFutureExt;
 //!
 //! async fn reverse_bytes(
-//!     mut source: impl Source<Item=u8> + Unpin,
-//!     mut sink: impl Sink<Item=u8> + Unpin,
+//!     mut source: impl View<Item=u8> + Unpin,
+//!     mut sink: impl ViewMut<Item=u8> + Unpin,
 //!     width: usize
 //! ) -> Result<(), &'static str> {
 //!     loop {

@@ -8,7 +8,7 @@ async fn async_reader_writer() {
 
     let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::AsyncWriter::new(sink);
-    let mut read = rivulet::io::AsyncReader::new(source.into_source());
+    let mut read = rivulet::io::AsyncReader::new(source.into_view());
 
     let sent = tokio::spawn(async move {
         let mut rng = SmallRng::from_entropy();
@@ -37,7 +37,7 @@ async fn async_bufreader_writer() {
 
     let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::AsyncWriter::new(sink);
-    let mut read = rivulet::io::AsyncReader::new(source.into_source());
+    let mut read = rivulet::io::AsyncReader::new(source.into_view());
 
     let sent = tokio::spawn(async move {
         let mut rng = SmallRng::from_entropy();
@@ -66,7 +66,7 @@ fn sync_reader_writer() {
 
     let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::Writer::new(sink);
-    let mut read = rivulet::io::Reader::new(source.into_source());
+    let mut read = rivulet::io::Reader::new(source.into_view());
 
     let sent = std::thread::spawn(move || {
         let mut rng = SmallRng::from_entropy();
@@ -96,7 +96,7 @@ fn sync_bufreader_writer() {
 
     let (sink, source) = circular_buffer(4096);
     let mut write = rivulet::io::Writer::new(sink);
-    let mut read = rivulet::io::Reader::new(source.into_source());
+    let mut read = rivulet::io::Reader::new(source.into_view());
 
     let sent = std::thread::spawn(move || {
         let mut rng = SmallRng::from_entropy();

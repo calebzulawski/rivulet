@@ -6,7 +6,7 @@ use rivulet::{
 #[test]
 fn slice() {
     let mut storage: Vec<u8> = (0..100).collect();
-    let mut stream = Slice::new(&mut storage).into_source();
+    let mut stream = Slice::new(&mut storage).into_view();
 
     // There should be an immediate view available
     stream.blocking_grant(0).unwrap();
@@ -42,7 +42,7 @@ fn slice() {
 #[test]
 fn slice_mut() {
     let mut storage: Vec<u8> = (0..100).collect();
-    let mut stream = SliceMut::new(&mut storage).into_source();
+    let mut stream = SliceMut::new(&mut storage).into_view();
 
     // There should be an immediate view available
     stream.blocking_grant(0).unwrap();
@@ -88,6 +88,6 @@ fn slice_mut() {
 #[should_panic]
 fn bad_release() {
     let storage: Vec<u8> = (0..100).collect();
-    let mut stream = Slice::new(&storage).into_source();
+    let mut stream = Slice::new(&storage).into_view();
     stream.release(101);
 }
