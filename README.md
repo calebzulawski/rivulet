@@ -1,4 +1,4 @@
-Rivulet
+<img src="icon.png" alt="icon" height="25" />Rivulet
 =======
 [![Build Status](https://github.com/calebzulawski/rivulet/workflows/Build/badge.svg?branch=master)](https://github.com/calebzulawski/rivulet/actions)
 ![Rustc Version 1.45+](https://img.shields.io/badge/rustc-1.45+-lightgray.svg)
