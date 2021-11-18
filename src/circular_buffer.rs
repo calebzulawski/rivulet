@@ -257,7 +257,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
     type Item = T;
     type Error = GrantOverflow;
 
-    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + Send + Sync + 'static) {
+    unsafe fn set_reader_waker(&self, waker: impl Fn() + Send + Sync + 'static) {
         let mut lock = self
             .state
             .read_waker
@@ -267,7 +267,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
         *lock = Some(Box::new(waker));
     }
 
-    unsafe fn set_head(&mut self, index: u64) {
+    unsafe fn set_head(&self, index: u64) {
         self.state.head.store(index, Ordering::Relaxed);
         self.state.write_waker.wake();
     }
@@ -295,7 +295,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
     fn poll_available(
         self: Pin<&Self>,
         cx: &mut Context,
-        register_wakeup: impl FnOnce(&Waker),
+        register_wakeup: impl Fn(&Waker),
         index: u64,
         len: usize,
     ) -> Poll<Result<usize, Self::Error>> {

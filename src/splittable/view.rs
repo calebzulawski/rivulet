@@ -22,7 +22,7 @@ impl<T> View<T>
 where
     T: Splittable,
 {
-    pub(crate) fn new(mut splittable: T) -> Self {
+    pub(crate) fn new(splittable: T) -> Self {
         let waker = Arc::new(AtomicWaker::new());
         // Safety: we have unique ownership of this
         unsafe {

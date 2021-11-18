@@ -29,9 +29,9 @@ unsafe impl<'a, T> SplittableImpl for Slice<'a, T> {
     type Item = T;
     type Error = Infallible;
 
-    unsafe fn set_reader_waker(&mut self, _: impl Fn() + Send + Sync + 'static) {}
+    unsafe fn set_reader_waker(&self, _: impl Fn() + Send + Sync + 'static) {}
 
-    unsafe fn set_head(&mut self, _: u64) {}
+    unsafe fn set_head(&self, _: u64) {}
 
     unsafe fn compare_set_head(&self, _: u64) {}
 
@@ -83,9 +83,9 @@ unsafe impl<'a, T> SplittableImpl for SliceMut<'a, T> {
     type Item = T;
     type Error = Infallible;
 
-    unsafe fn set_reader_waker(&mut self, _: impl Fn() + Send + Sync + 'static) {}
+    unsafe fn set_reader_waker(&self, _: impl Fn() + Send + Sync + 'static) {}
 
-    unsafe fn set_head(&mut self, _: u64) {}
+    unsafe fn set_head(&self, _: u64) {}
 
     unsafe fn compare_set_head(&self, _: u64) {}
 

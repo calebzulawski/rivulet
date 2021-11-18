@@ -11,6 +11,9 @@ pub use view::View;
 mod cloneable;
 pub use cloneable::Cloneable;
 
+mod sequence;
+pub use sequence::{First, Second};
+
 /// The implementation behind [`Splittable`].
 ///
 /// Unless you are manually implementing a view, you should use [`Splittable`] directly.
@@ -27,7 +30,7 @@ pub unsafe trait SplittableImpl: Unpin {
     ///
     /// # Safety
     /// Only set the waker if you have unique ownership of this.
-    unsafe fn set_reader_waker(&mut self, waker: impl Fn() + Send + Sync + 'static);
+    unsafe fn set_reader_waker(&self, waker: impl Fn() + Send + Sync + 'static);
 
     /// Set the earliest position retained in the stream.
     ///
@@ -37,7 +40,7 @@ pub unsafe trait SplittableImpl: Unpin {
     /// # Safety
     /// Only set the head if you have unique ownership of this and will not attempt to read any
     /// data earlier than `index`.
-    unsafe fn set_head(&mut self, index: u64);
+    unsafe fn set_head(&self, index: u64);
 
     /// Set the earliest position retained in the stream.
     ///
@@ -55,7 +58,7 @@ pub unsafe trait SplittableImpl: Unpin {
     fn poll_available(
         self: Pin<&Self>,
         cx: &mut Context,
-        register_wakeup: impl FnOnce(&Waker),
+        register_wakeup: impl Fn(&Waker),
         index: u64,
         len: usize,
     ) -> Poll<Result<usize, Self::Error>>;
