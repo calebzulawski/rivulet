@@ -12,12 +12,13 @@ mod cloneable;
 pub use cloneable::Cloneable;
 
 mod sequence;
+use sequence::make_sequence;
 pub use sequence::{First, Second};
 
 /// The implementation behind [`Splittable`].
 ///
 /// Unless you are manually implementing a view, you should use [`Splittable`] directly.
-pub unsafe trait SplittableImpl: Unpin {
+pub unsafe trait SplittableImpl: Sized + Unpin {
     /// The streamed type.
     type Item;
 
@@ -92,19 +93,19 @@ pub unsafe trait SplittableImplMut: SplittableImpl {
 /// A view that can be split for use with multiple readers.
 pub trait Splittable: SplittableImpl {
     /// Create a view for a single reader.
-    fn into_view(self) -> View<Self>
-    where
-        Self: Sized,
-    {
+    fn into_view(self) -> View<Self> {
         View::new(self)
     }
 
     /// Create a view that implements `Clone`.
-    fn into_cloneable_view(self) -> Cloneable<Self>
-    where
-        Self: Sized,
-    {
+    fn into_cloneable_view(self) -> Cloneable<Self> {
         Cloneable::new(self)
+    }
+
+    /// Split this view into two sequential views, such that data released by `First` becomes
+    /// accessible to `Second`.
+    fn sequence(self) -> (First<Self>, Second<Self>) {
+        make_sequence(self)
     }
 }
 

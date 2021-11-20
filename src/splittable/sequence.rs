@@ -10,6 +10,26 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+pub(super) fn make_sequence<T>(splittable: T) -> (First<T>, Second<T>)
+where
+    T: Splittable,
+{
+    let shared = Arc::new(Shared {
+        splittable,
+        head: AtomicU64::new(0),
+        closed: AtomicBool::new(false),
+        waker: Mutex::new(None),
+    });
+
+    (
+        First {
+            shared: shared.clone(),
+            waker: OnceCell::new(),
+        },
+        Second { shared },
+    )
+}
+
 struct Shared<T>
 where
     T: Splittable,
