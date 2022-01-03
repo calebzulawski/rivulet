@@ -8,40 +8,40 @@
 <li><strong>Modular</strong>: Pipelines can be combined and reused using common interfaces.</li>
 </ul>
 <h2 id="example" class="section-header"><a href="#example">Example</a></h2>
-<p>Let’s create a simple pipeline for byte-reversing.</p>
+<p>Let’s create a simple averaging downsampler pipeline.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use</span> <span class="ident">rivulet</span>::{<span class="ident">View</span>, <span class="ident">ViewMut</span>};
 <span class="kw">use</span> <span class="ident">futures::future::TryFutureExt</span>;
 
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">reverse_bytes</span>(
-    <span class="kw-2">mut</span> <span class="ident">source</span>: <span class="kw">impl</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span><span class="op">=</span><span class="ident">u8</span><span class="op">&gt;</span>,
-    <span class="kw-2">mut</span> <span class="ident">sink</span>: <span class="kw">impl</span> <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span><span class="op">=</span><span class="ident">u8</span><span class="op">&gt;</span>,
-    <span class="ident">width</span>: <span class="ident">usize</span>
+<span class="doccomment">/// This function reads samples from the source pipeline, averages them,</span>
+<span class="doccomment">/// and writes the average to the sink pipeline.</span>
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">downsample</span>(
+    <span class="kw-2">mut</span> <span class="ident">source</span>: <span class="kw">impl</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">Item</span><span class="op">=</span><span class="ident">f32</span><span class="op">&gt;</span>,
+    <span class="kw-2">mut</span> <span class="ident">sink</span>: <span class="kw">impl</span> <span class="ident">ViewMut</span><span class="op">&lt;</span><span class="ident">Item</span><span class="op">=</span><span class="ident">f32</span><span class="op">&gt;</span>,
+    <span class="ident">factor</span>: <span class="ident">usize</span>
 ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span> {
     <span class="kw">loop</span> {
-        <span class="comment">// Wait for the input and output to have `width` elements available.</span>
+        <span class="comment">// Wait for the input and output to be available.</span>
         <span class="macro">tokio::try_join!</span>(
-            <span class="ident">source</span>.<span class="ident">grant</span>(<span class="ident">width</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="string">&quot;we got an input error!&quot;</span>),
-            <span class="ident">sink</span>.<span class="ident">grant</span>(<span class="ident">width</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="string">&quot;we got an output error!&quot;</span>),
+            <span class="ident">source</span>.<span class="ident">grant</span>(<span class="ident">factor</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="string">&quot;we got an input error!&quot;</span>),
+            <span class="ident">sink</span>.<span class="ident">grant</span>(<span class="number">1</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="string">&quot;we got an output error!&quot;</span>),
         )<span class="question-mark">?</span>;
 
-        <span class="comment">// The view could be longer (if extra data is available) or shorter (if the stream closed)</span>
+        <span class="comment">// Each view could be longer (if extra data is available)</span>
+        <span class="comment">// or shorter (if the stream closed)</span>
         <span class="kw">let</span> <span class="ident">input</span> <span class="op">=</span> <span class="ident">source</span>.<span class="ident">view</span>();
         <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="ident">sink</span>.<span class="ident">view_mut</span>();
-        <span class="kw">if</span> <span class="ident">input</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">width</span> <span class="op">|</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">width</span> {
+        <span class="kw">if</span> <span class="ident">input</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="ident">factor</span> <span class="op">|</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">is_empty</span>() {
             <span class="kw">break</span> <span class="prelude-val">Ok</span>(())
         }
-        <span class="kw">let</span> <span class="ident">input</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">input</span>[..<span class="ident">width</span>];
-        <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="kw-2">&amp;mut</span> <span class="ident">output</span>[..<span class="ident">width</span>];
 
-        <span class="comment">// Copy the elements from the source into the sink, in reverse</span>
-        <span class="kw">for</span> (<span class="ident">i</span>, <span class="ident">o</span>) <span class="kw">in</span> <span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">rev</span>().<span class="ident">zip</span>(<span class="ident">output</span>.<span class="ident">iter_mut</span>()) {
-            <span class="kw-2">*</span><span class="ident">o</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">i</span>;
-        }
+        <span class="comment">// Average the values</span>
+        <span class="ident">output</span>[<span class="number">0</span>] <span class="op">=</span> <span class="ident">input</span>[..<span class="ident">factor</span>].<span class="ident">iter</span>().<span class="ident">sum</span>::<span class="op">&lt;</span><span class="ident">f32</span><span class="op">&gt;</span>() <span class="op">/</span> <span class="ident">factor</span> <span class="kw">as</span> <span class="ident">f32</span>;
 
-        <span class="comment">// We&#39;ve written all our data, so release our current views and advance the streams</span>
-        <span class="ident">source</span>.<span class="ident">release</span>(<span class="ident">width</span>);
-        <span class="ident">sink</span>.<span class="ident">release</span>(<span class="ident">width</span>);
+        <span class="comment">// We&#39;ve written all our data, so release our current views</span>
+        <span class="comment">// and advance the streams</span>
+        <span class="ident">source</span>.<span class="ident">release</span>(<span class="ident">factor</span>);
+        <span class="ident">sink</span>.<span class="ident">release</span>(<span class="number">1</span>);
     }
 }</code></pre></div>
 </div></details><h2 id="reexports" class="small-section-header"><a href="#reexports">Re-exports</a></h2>

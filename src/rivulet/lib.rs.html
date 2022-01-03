@@ -76,41 +76,41 @@
 <span class="doccomment">//!</span>
 <span class="doccomment">//! # Example</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! Let&#39;s create a simple pipeline for byte-reversing.</span>
+<span class="doccomment">//! Let&#39;s create a simple averaging downsampler pipeline.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ```</span>
 <span class="doccomment">//! use rivulet::{View, ViewMut};</span>
 <span class="doccomment">//! use futures::future::TryFutureExt;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! async fn reverse_bytes(</span>
-<span class="doccomment">//!     mut source: impl View&lt;Item=u8&gt;,</span>
-<span class="doccomment">//!     mut sink: impl ViewMut&lt;Item=u8&gt;,</span>
-<span class="doccomment">//!     width: usize</span>
+<span class="doccomment">//! /// This function reads samples from the source pipeline, averages them,</span>
+<span class="doccomment">//! /// and writes the average to the sink pipeline.</span>
+<span class="doccomment">//! async fn downsample(</span>
+<span class="doccomment">//!     mut source: impl View&lt;Item=f32&gt;,</span>
+<span class="doccomment">//!     mut sink: impl ViewMut&lt;Item=f32&gt;,</span>
+<span class="doccomment">//!     factor: usize</span>
 <span class="doccomment">//! ) -&gt; Result&lt;(), &amp;&#39;static str&gt; {</span>
 <span class="doccomment">//!     loop {</span>
-<span class="doccomment">//!         // Wait for the input and output to have `width` elements available.</span>
+<span class="doccomment">//!         // Wait for the input and output to be available.</span>
 <span class="doccomment">//!         tokio::try_join!(</span>
-<span class="doccomment">//!             source.grant(width).map_err(|_| &quot;we got an input error!&quot;),</span>
-<span class="doccomment">//!             sink.grant(width).map_err(|_| &quot;we got an output error!&quot;),</span>
+<span class="doccomment">//!             source.grant(factor).map_err(|_| &quot;we got an input error!&quot;),</span>
+<span class="doccomment">//!             sink.grant(1).map_err(|_| &quot;we got an output error!&quot;),</span>
 <span class="doccomment">//!         )?;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//!         // The view could be longer (if extra data is available) or shorter (if the stream closed)</span>
+<span class="doccomment">//!         // Each view could be longer (if extra data is available)</span>
+<span class="doccomment">//!         // or shorter (if the stream closed)</span>
 <span class="doccomment">//!         let input = source.view();</span>
 <span class="doccomment">//!         let output = sink.view_mut();</span>
-<span class="doccomment">//!         if input.len() &lt; width || output.len() &lt; width {</span>
+<span class="doccomment">//!         if input.len() &lt; factor || output.is_empty() {</span>
 <span class="doccomment">//!             break Ok(())</span>
 <span class="doccomment">//!         }</span>
-<span class="doccomment">//!         let input = &amp;input[..width];</span>
-<span class="doccomment">//!         let output = &amp;mut output[..width];</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//!         // Copy the elements from the source into the sink, in reverse</span>
-<span class="doccomment">//!         for (i, o) in input.iter().rev().zip(output.iter_mut()) {</span>
-<span class="doccomment">//!             *o = *i;</span>
-<span class="doccomment">//!         }</span>
+<span class="doccomment">//!         // Average the values</span>
+<span class="doccomment">//!         output[0] = input[..factor].iter().sum::&lt;f32&gt;() / factor as f32;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//!         // We&#39;ve written all our data, so release our current views and advance the streams</span>
-<span class="doccomment">//!         source.release(width);</span>
-<span class="doccomment">//!         sink.release(width);</span>
+<span class="doccomment">//!         // We&#39;ve written all our data, so release our current views</span>
+<span class="doccomment">//!         // and advance the streams</span>
+<span class="doccomment">//!         source.release(factor);</span>
+<span class="doccomment">//!         sink.release(1);</span>
 <span class="doccomment">//!     }</span>
 <span class="doccomment">//! }</span>
 <span class="doccomment">//! ```</span>
