@@ -85,28 +85,37 @@ where
     }
 
     unsafe fn set_head(&self, index: u64) {
-        self.shared.head.store(index, Ordering::Relaxed);
-        self.wake_second()
+        if self.shared.closed.load(Ordering::Relaxed) {
+            // This may overlap with a drop of `Second`, so always use `compare_set_head`.
+            self.shared.splittable.compare_set_head(index);
+        } else {
+            self.shared.head.store(index, Ordering::Relaxed);
+            self.wake_second();
+        }
     }
 
     unsafe fn compare_set_head(&self, index: u64) {
-        // only set the head if it's greater than the current head
-        let mut current = self.shared.head.load(Ordering::Relaxed);
-        if index > current {
-            while let Err(previous) = self.shared.head.compare_exchange_weak(
-                current,
-                index,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                if index > previous {
-                    current = previous
-                } else {
-                    break;
+        if self.shared.closed.load(Ordering::Relaxed) {
+            self.shared.splittable.compare_set_head(index);
+        } else {
+            // only set the head if it's greater than the current head
+            let mut current = self.shared.head.load(Ordering::Relaxed);
+            if index > current {
+                while let Err(previous) = self.shared.head.compare_exchange_weak(
+                    current,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    if index > previous {
+                        current = previous
+                    } else {
+                        break;
+                    }
                 }
             }
+            self.wake_second()
         }
-        self.wake_second()
     }
 
     fn poll_available(
@@ -139,6 +148,24 @@ where
     T: Splittable,
 {
     shared: Arc<Shared<T>>,
+}
+
+impl<T> Drop for Second<T>
+where
+    T: Splittable,
+{
+    fn drop(&mut self) {
+        self.shared.closed.store(true, Ordering::Relaxed);
+
+        // Safety: this view is done with `head` so we can drop up to it.
+        // We must use `compare_set_head` since this may overlap with an advance on `First` that
+        // happens after `closed` is set but before setting the head occurs.
+        unsafe {
+            self.shared
+                .splittable
+                .compare_set_head(self.shared.head.load(Ordering::Relaxed));
+        }
+    }
 }
 
 impl<T> Second<T>
@@ -183,16 +210,12 @@ where
         // The first check is efficient, but may spuriously fail.
         // The second check occurs after the `acquire` produced by registering the waker.
         let available = self.readable_len(index);
-        if self.shared.closed.load(Ordering::Relaxed) {
-            Pin::new(&self.shared.splittable).poll_available(cx, register_wakeup, index, len)
-        } else if available >= len {
+        if available >= len {
             Poll::Ready(Ok(available))
         } else {
             register_wakeup(cx.waker());
             let available = self.readable_len(index);
-            if self.shared.closed.load(Ordering::Relaxed) {
-                Pin::new(&self.shared.splittable).poll_available(cx, register_wakeup, index, len)
-            } else if available >= len {
+            if available >= len || self.shared.closed.load(Ordering::Relaxed) {
                 Poll::Ready(Ok(available))
             } else {
                 Poll::Pending

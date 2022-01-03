@@ -90,15 +90,17 @@ async fn sequence_multiple_reader() {
 
 #[tokio::test]
 async fn sequence_drop_first() {
-    let (sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
+    let (mut sink, source) = circular_buffer::<i64>(BUFFER_SIZE);
     let (_, second) = source.sequence();
+    let mut second = second.into_view();
 
-    let write_hash = tokio::spawn(write(sink, 500, 400));
-    let read_hash = tokio::spawn(read(second.into_view(), false));
+    // Add a bit of data.
+    sink.grant(1).await.unwrap();
+    sink.release(1);
 
-    let (write_hash, read_hash) = tokio::join!(write_hash, read_hash);
-
-    assert_eq!(write_hash.unwrap(), read_hash.unwrap());
+    // The stream is closed, so this should return an empty view.
+    second.grant(100).await.unwrap();
+    assert_eq!(second.view(), &[]);
 }
 
 #[tokio::test]
