@@ -18,6 +18,9 @@ pub use sequence::{First, Second};
 /// The implementation behind [`Splittable`].
 ///
 /// Unless you are manually implementing a view, you should use [`Splittable`] directly.
+///
+/// # Safety
+/// The implementation must satisfy the various interior mutability conditions specified in each method.
 pub unsafe trait SplittableImpl: Sized + Unpin {
     /// The streamed type.
     type Item;
@@ -75,6 +78,9 @@ pub unsafe trait SplittableImpl: Sized + Unpin {
 /// The implementation behind [`SplittableMut`].
 ///
 /// Unless you are manually implementing a view, you should use [`SplittableMut`] directly.
+///
+/// # Safety
+/// The implementation must satisfy the various interior mutability conditions specified in each method.
 pub unsafe trait SplittableImplMut: SplittableImpl {
     /// Obtain a mutable view into the stream.
     ///
