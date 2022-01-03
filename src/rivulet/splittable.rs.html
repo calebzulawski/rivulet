@@ -116,6 +116,12 @@
 <span id="114">114</span>
 <span id="115">115</span>
 <span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Streams that can be split into multiple views.</span>
 
 <span class="kw">use</span> <span class="ident">core</span>::{
@@ -136,6 +142,9 @@
 <span class="doccomment">/// The implementation behind [`Splittable`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Unless you are manually implementing a view, you should use [`Splittable`] directly.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// # Safety</span>
+<span class="doccomment">/// The implementation must satisfy the various interior mutability conditions specified in each method.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImpl</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Unpin</span> {
     <span class="doccomment">/// The streamed type.</span>
     <span class="kw">type</span> <span class="ident">Item</span>;
@@ -193,6 +202,9 @@
 <span class="doccomment">/// The implementation behind [`SplittableMut`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Unless you are manually implementing a view, you should use [`SplittableMut`] directly.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// # Safety</span>
+<span class="doccomment">/// The implementation must satisfy the various interior mutability conditions specified in each method.</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">SplittableImplMut</span>: <span class="ident">SplittableImpl</span> {
     <span class="doccomment">/// Obtain a mutable view into the stream.</span>
     <span class="doccomment">///</span>
