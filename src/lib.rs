@@ -11,41 +11,41 @@
 //!
 //! # Example
 //!
-//! Let's create a simple pipeline for byte-reversing.
+//! Let's create a simple averaging downsampler pipeline.
 //!
 //! ```
 //! use rivulet::{View, ViewMut};
 //! use futures::future::TryFutureExt;
 //!
-//! async fn reverse_bytes(
-//!     mut source: impl View<Item=u8>,
-//!     mut sink: impl ViewMut<Item=u8>,
-//!     width: usize
+//! /// This function reads samples from the source pipeline, averages them,
+//! /// and writes the average to the sink pipeline.
+//! async fn downsample(
+//!     mut source: impl View<Item=f32>,
+//!     mut sink: impl ViewMut<Item=f32>,
+//!     factor: usize
 //! ) -> Result<(), &'static str> {
 //!     loop {
-//!         // Wait for the input and output to have `width` elements available.
+//!         // Wait for the input and output to be available.
 //!         tokio::try_join!(
-//!             source.grant(width).map_err(|_| "we got an input error!"),
-//!             sink.grant(width).map_err(|_| "we got an output error!"),
+//!             source.grant(factor).map_err(|_| "we got an input error!"),
+//!             sink.grant(1).map_err(|_| "we got an output error!"),
 //!         )?;
 //!
-//!         // The view could be longer (if extra data is available) or shorter (if the stream closed)
+//!         // Each view could be longer (if extra data is available)
+//!         // or shorter (if the stream closed)
 //!         let input = source.view();
 //!         let output = sink.view_mut();
-//!         if input.len() < width || output.len() < width {
+//!         if input.len() < factor || output.is_empty() {
 //!             break Ok(())
 //!         }
-//!         let input = &input[..width];
-//!         let output = &mut output[..width];
 //!
-//!         // Copy the elements from the source into the sink, in reverse
-//!         for (i, o) in input.iter().rev().zip(output.iter_mut()) {
-//!             *o = *i;
-//!         }
+//!         // Average the values
+//!         output[0] = input[..factor].iter().sum::<f32>() / factor as f32;
 //!
-//!         // We've written all our data, so release our current views and advance the streams
-//!         source.release(width);
-//!         sink.release(width);
+//!         // We've written all our data, so release our current views
+//!         // and advance the streams
+//!         source.release(factor);
+//!         sink.release(1);
 //!     }
 //! }
 //! ```
