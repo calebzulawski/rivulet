@@ -174,7 +174,7 @@
 <span id="172">172</span>
 <span id="173">173</span>
 <span id="174">174</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">super</span>::Splittable</span>;
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">super</span>::SplittableView</span>;
 <span class="kw">use</span> <span class="ident">futures::task::AtomicWaker</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">convert::TryInto</span>,
@@ -239,13 +239,13 @@
 }
 
 <span class="doccomment">/// A view returned by</span>
-<span class="doccomment">/// [`Splittable::into_cloneable_view`](`super::Splittable::into_cloneable_view`).</span>
+<span class="doccomment">/// [`SplittableView::into_cloneable_view`](`super::SplittableView::into_cloneable_view`).</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// This view may be cloned to be used with other readers.  The cloned view is initialized with</span>
 <span class="doccomment">/// the same view of the stream.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="ident">splittable</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">this_reader</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Reader</span><span class="op">&gt;</span>,
@@ -256,7 +256,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">splittable</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">waker</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Waker::new</span>());
@@ -279,7 +279,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Clone</span> <span class="kw">for</span> <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">clone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">this_reader</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">waker</span>.<span class="ident">insert</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">this_reader</span>);
@@ -295,7 +295,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">waker</span>.<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">this_reader</span>);
@@ -304,7 +304,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident"><span class="kw">crate</span>::View</span> <span class="kw">for</span> <span class="ident">Cloneable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T::Item</span>;
     <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">T::Error</span>;
@@ -349,5 +349,5 @@
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (8f3238f89 2022-01-02)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (399ba6bb3 2022-01-03)" ></div>
 </body></html>

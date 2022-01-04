@@ -97,7 +97,7 @@
 <span id="95">95</span>
 <span id="96">96</span>
 <span id="97">97</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">Splittable</span>, <span class="ident">SplittableMut</span>};
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">SplittableView</span>, <span class="ident">SplittableViewMut</span>};
 <span class="kw">use</span> <span class="ident">futures::task::AtomicWaker</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">convert::TryInto</span>,
@@ -106,10 +106,10 @@
     <span class="ident">task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>},
 };
 
-<span class="doccomment">/// A view returned by [`Splittable::into_view`](`super::Splittable::into_view`).</span>
+<span class="doccomment">/// A view returned by [`SplittableView::into_view`](`super::SplittableView::into_view`).</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="ident">splittable</span>: <span class="ident">T</span>,
     <span class="ident">waker</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">AtomicWaker</span><span class="op">&gt;</span>,
@@ -119,7 +119,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">splittable</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">waker</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">AtomicWaker::new</span>());
@@ -139,7 +139,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident"><span class="kw">crate</span>::View</span> <span class="kw">for</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T::Item</span>;
     <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">T::Error</span>;
@@ -187,7 +187,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident"><span class="kw">crate</span>::ViewMut</span> <span class="kw">for</span> <span class="ident">View</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">SplittableMut</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableViewMut</span>,
 {
     <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>] {
         <span class="comment">// Safety: we have unique ownership of the view, so this doesn&#39;t overlap with any other views</span>
@@ -195,5 +195,5 @@
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (8f3238f89 2022-01-02)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (399ba6bb3 2022-01-03)" ></div>
 </body></html>

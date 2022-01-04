@@ -63,6 +63,17 @@
 <span id="61">61</span>
 <span id="62">62</span>
 <span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">feature</span>(<span class="ident">doc_cfg</span>))]</span>
 <span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;std&quot;</span>), <span class="ident">no_std</span>)]</span>
 <span class="attribute">#![<span class="ident">deny</span>(<span class="ident">missing_docs</span>)]</span>
@@ -74,6 +85,17 @@
 <span class="doccomment">//! * **Contiguous views**: Data is always contiguous, accessible by a single slice.</span>
 <span class="doccomment">//! * **Modular**: Pipelines can be combined and reused using common interfaces.</span>
 <span class="doccomment">//!</span>
+<span class="doccomment">//! # Getting started</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The most basic interface is a [`View`].</span>
+<span class="doccomment">//! Streams of data in `rivulet` are like slices, but you can&#39;t access the entire slice at once.</span>
+<span class="doccomment">//! A [`View`] is sliding window over the stream, only requiring a small portion of the stream to</span>
+<span class="doccomment">//! be in memory.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! A [`SplittableView`] is a special view that can split into multiple, simultaneously available views for use with multiple readers and writers.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This crate provides a few stream implementations, but the most notable is the [`mod@circular_buffer`], which is optimized for asynchronous contiguous data access.</span>
+<span class="doccomment">//!</span>
 <span class="doccomment">//! # Example</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! Let&#39;s create a simple averaging downsampler pipeline.</span>
@@ -82,8 +104,8 @@
 <span class="doccomment">//! use rivulet::{View, ViewMut};</span>
 <span class="doccomment">//! use futures::future::TryFutureExt;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! /// This function reads samples from the source pipeline, averages them,</span>
-<span class="doccomment">//! /// and writes the average to the sink pipeline.</span>
+<span class="doccomment">//! /// This function reads samples from the source, averages them,</span>
+<span class="doccomment">//! /// and writes the average to the sink.</span>
 <span class="doccomment">//! async fn downsample(</span>
 <span class="doccomment">//!     mut source: impl View&lt;Item=f32&gt;,</span>
 <span class="doccomment">//!     mut sink: impl ViewMut&lt;Item=f32&gt;,</span>
@@ -124,8 +146,8 @@
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">view</span>;
 
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">circular_buffer::circular_buffer</span>;
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">splittable::Splittable</span>;
+<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">splittable::SplittableView</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">view</span>::{<span class="ident">View</span>, <span class="ident">ViewMut</span>};
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (8f3238f89 2022-01-02)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (399ba6bb3 2022-01-03)" ></div>
 </body></html>

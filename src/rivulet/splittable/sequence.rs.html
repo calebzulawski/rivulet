@@ -238,7 +238,11 @@
 <span id="236">236</span>
 <span id="237">237</span>
 <span id="238">238</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::splittable</span>::{<span class="ident">Splittable</span>, <span class="ident">SplittableImpl</span>, <span class="ident">SplittableImplMut</span>, <span class="ident">SplittableMut</span>};
+<span id="239">239</span>
+<span id="240">240</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::splittable</span>::{
+    <span class="ident">SplittableView</span>, <span class="ident">SplittableViewImpl</span>, <span class="ident">SplittableViewImplMut</span>, <span class="ident">SplittableViewMut</span>,
+};
 <span class="kw">use</span> <span class="ident">once_cell::sync::OnceCell</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">convert::TryInto</span>,
@@ -252,7 +256,7 @@
 
 <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">make_sequence</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">splittable</span>: <span class="ident">T</span>) -&gt; (<span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>, <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>)
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">let</span> <span class="ident">shared</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Shared</span> {
         <span class="ident">splittable</span>,
@@ -272,7 +276,7 @@
 
 <span class="kw">struct</span> <span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="ident">splittable</span>: <span class="ident">T</span>,
     <span class="ident">head</span>: <span class="ident">AtomicU64</span>,
@@ -280,10 +284,10 @@
     <span class="ident">waker</span>: <span class="ident">Mutex</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Fn</span>() <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
-<span class="doccomment">/// The first `Splittable` produced by [`sequence`](`crate::Splittable::sequence`).</span>
+<span class="doccomment">/// The first `SplittableView` produced by [`sequence`](`crate::SplittableView::sequence`).</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">waker</span>: <span class="ident">OnceCell</span><span class="op">&lt;</span><span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Fn</span>() <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span><span class="op">&gt;</span>,
@@ -291,7 +295,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">closed</span>.<span class="ident">store</span>(<span class="bool-val">true</span>, <span class="ident">Ordering::Relaxed</span>);
@@ -301,7 +305,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">wake_second</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">waker</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">waker</span>.<span class="ident">get_or_try_init</span>(<span class="op">|</span><span class="op">|</span> {
@@ -313,9 +317,9 @@
     }
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableImpl</span> <span class="kw">for</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableViewImpl</span> <span class="kw">for</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T::Item</span>;
     <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">T::Error</span>;
@@ -373,26 +377,26 @@
     }
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableImplMut</span> <span class="kw">for</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableViewImplMut</span> <span class="kw">for</span> <span class="ident">First</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">SplittableMut</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableViewMut</span>,
 {
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="ident">u64</span>, <span class="ident">len</span>: <span class="ident">usize</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>] {
         <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">splittable</span>.<span class="ident">view_mut</span>(<span class="ident">index</span>, <span class="ident">len</span>)
     }
 }
 
-<span class="doccomment">/// The second `Splittable` produced by [`sequence`](`crate::Splittable::sequence`).</span>
+<span class="doccomment">/// The second `SplittableView` produced by [`sequence`](`crate::SplittableView::sequence`).</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">closed</span>.<span class="ident">store</span>(<span class="bool-val">true</span>, <span class="ident">Ordering::Relaxed</span>);
@@ -410,7 +414,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">fn</span> <span class="ident">readable_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">start</span>: <span class="ident">u64</span>) -&gt; <span class="ident">usize</span> {
         (<span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">head</span>.<span class="ident">load</span>(<span class="ident">Ordering::Relaxed</span>) <span class="op">-</span> <span class="ident">start</span>)
@@ -419,9 +423,9 @@
     }
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableImpl</span> <span class="kw">for</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableViewImpl</span> <span class="kw">for</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Splittable</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableView</span>,
 {
     <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T::Item</span>;
     <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">T::Error</span>;
@@ -468,14 +472,14 @@
     }
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableImplMut</span> <span class="kw">for</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">SplittableViewImplMut</span> <span class="kw">for</span> <span class="ident">Second</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">SplittableMut</span>,
+    <span class="ident">T</span>: <span class="ident">SplittableViewMut</span>,
 {
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">view_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">index</span>: <span class="ident">u64</span>, <span class="ident">len</span>: <span class="ident">usize</span>) -&gt; <span class="kw-2">&amp;mut</span> [<span class="ident"><span class="self">Self</span>::Item</span>] {
         <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">splittable</span>.<span class="ident">view_mut</span>(<span class="ident">index</span>, <span class="ident">len</span>)
     }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (8f3238f89 2022-01-02)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="rivulet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (399ba6bb3 2022-01-03)" ></div>
 </body></html>
