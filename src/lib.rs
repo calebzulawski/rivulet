@@ -13,7 +13,7 @@
 //!
 //! The most basic interface is a [`View`].
 //! Streams of data in `rivulet` are like slices, but you can't access the entire slice at once.
-//! A [`View`] is sliding window over the stream, only requiring a small portion of the stream to
+//! A [`View`] is sliding window over the stream, requiring only a small portion of the stream to
 //! be in memory.
 //!
 //! A [`SplittableView`] is a special view that can split into multiple, simultaneously available views for use with multiple readers and writers.
