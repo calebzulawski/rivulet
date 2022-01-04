@@ -32,6 +32,8 @@ unsafe impl<T> Sync for UnsafeCircularBuffer<T> where T: Send {}
 
 impl<T> Drop for UnsafeCircularBuffer<T> {
     fn drop(&mut self) {
+        // Safety: the underlying storage is always initialized upon construction, and is safe to
+        // drop and unmap.
         unsafe {
             for i in 0..self.size {
                 std::ptr::drop_in_place(self.ptr.add(i));
@@ -54,6 +56,7 @@ impl<T: Default> UnsafeCircularBuffer<T> {
         let size = size_bytes / size_of::<T>();
 
         // Initialize the buffer memory
+        // Safety: `map_ring` returns an uninitialized slice.
         let ptr = unsafe {
             let ptr = vmap::os::map_ring(size_bytes).unwrap() as *mut T;
             for v in std::slice::from_raw_parts_mut(ptr as *mut MaybeUninit<T>, size) {
@@ -173,6 +176,7 @@ impl<T> View for Sink<T> {
     type Error = GrantOverflow;
 
     fn view(&self) -> &[T] {
+        // Safety: this region is owned exclusively by the writer.
         unsafe { self.state.buffer.range(self.tail, self.available) }
     }
 
@@ -229,6 +233,7 @@ impl<T> View for Sink<T> {
 
 impl<T> ViewMut for Sink<T> {
     fn view_mut(&mut self) -> &mut [T] {
+        // Safety: this region is owned exclusively by the writer.
         unsafe { self.state.buffer.range_mut(self.tail, self.available) }
     }
 }
