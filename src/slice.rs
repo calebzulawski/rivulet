@@ -1,6 +1,6 @@
 //! Utilities for working with slices.
 
-use crate::splittable::{SplittableImpl, SplittableImplMut};
+use crate::splittable::{SplittableViewImpl, SplittableViewImplMut};
 use core::{
     convert::Infallible,
     convert::TryInto,
@@ -25,7 +25,7 @@ impl<'a, T> Slice<'a, T> {
     }
 }
 
-unsafe impl<'a, T> SplittableImpl for Slice<'a, T> {
+unsafe impl<'a, T> SplittableViewImpl for Slice<'a, T> {
     type Item = T;
     type Error = Infallible;
 
@@ -79,7 +79,7 @@ impl<'a, T> SliceMut<'a, T> {
     }
 }
 
-unsafe impl<'a, T> SplittableImpl for SliceMut<'a, T> {
+unsafe impl<'a, T> SplittableViewImpl for SliceMut<'a, T> {
     type Item = T;
     type Error = Infallible;
 
@@ -105,7 +105,7 @@ unsafe impl<'a, T> SplittableImpl for SliceMut<'a, T> {
     }
 }
 
-unsafe impl<'a, T> SplittableImplMut for SliceMut<'a, T> {
+unsafe impl<'a, T> SplittableViewImplMut for SliceMut<'a, T> {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item] {
         slice::from_raw_parts_mut(self.ptr.add(index.try_into().unwrap()), len)
     }

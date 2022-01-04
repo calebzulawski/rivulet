@@ -1,5 +1,5 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{circular_buffer, Splittable};
+use rivulet::{circular_buffer, SplittableView};
 use std::hash::{Hash, Hasher};
 
 #[tokio::test]

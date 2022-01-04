@@ -1,4 +1,4 @@
-use super::Splittable;
+use super::SplittableView;
 use futures::task::AtomicWaker;
 use std::{
     convert::TryInto,
@@ -63,13 +63,13 @@ impl Waker {
 }
 
 /// A view returned by
-/// [`Splittable::into_cloneable_view`](`super::Splittable::into_cloneable_view`).
+/// [`SplittableView::into_cloneable_view`](`super::SplittableView::into_cloneable_view`).
 ///
 /// This view may be cloned to be used with other readers.  The cloned view is initialized with
 /// the same view of the stream.
 pub struct Cloneable<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     splittable: Pin<Arc<T>>,
     this_reader: Arc<Reader>,
@@ -80,7 +80,7 @@ where
 
 impl<T> Cloneable<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     pub(crate) fn new(splittable: T) -> Self {
         let waker = Arc::new(Waker::new());
@@ -103,7 +103,7 @@ where
 
 impl<T> Clone for Cloneable<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn clone(&self) -> Self {
         let this_reader = self.waker.insert(&self.this_reader);
@@ -119,7 +119,7 @@ where
 
 impl<T> Drop for Cloneable<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn drop(&mut self) {
         self.waker.remove(&self.this_reader);
@@ -128,7 +128,7 @@ where
 
 impl<T> crate::View for Cloneable<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     type Item = T::Item;
     type Error = T::Error;

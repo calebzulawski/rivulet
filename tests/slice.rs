@@ -1,6 +1,6 @@
 use rivulet::{
     slice::{Slice, SliceMut},
-    Splittable, View, ViewMut,
+    SplittableView, View, ViewMut,
 };
 
 #[test]

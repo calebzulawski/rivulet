@@ -1,4 +1,4 @@
-use super::{Splittable, SplittableMut};
+use super::{SplittableView, SplittableViewMut};
 use futures::task::AtomicWaker;
 use std::{
     convert::TryInto,
@@ -7,10 +7,10 @@ use std::{
     task::{Context, Poll},
 };
 
-/// A view returned by [`Splittable::into_view`](`super::Splittable::into_view`).
+/// A view returned by [`SplittableView::into_view`](`super::SplittableView::into_view`).
 pub struct View<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     splittable: T,
     waker: Arc<AtomicWaker>,
@@ -20,7 +20,7 @@ where
 
 impl<T> View<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     pub(crate) fn new(splittable: T) -> Self {
         let waker = Arc::new(AtomicWaker::new());
@@ -40,7 +40,7 @@ where
 
 impl<T> crate::View for View<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     type Item = T::Item;
     type Error = T::Error;
@@ -88,7 +88,7 @@ where
 
 impl<T> crate::ViewMut for View<T>
 where
-    T: SplittableMut,
+    T: SplittableViewMut,
 {
     fn view_mut(&mut self) -> &mut [Self::Item] {
         // Safety: we have unique ownership of the view, so this doesn't overlap with any other views

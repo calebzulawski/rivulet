@@ -1,5 +1,5 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{circular_buffer, Splittable, View, ViewMut};
+use rivulet::{circular_buffer, SplittableView, View, ViewMut};
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
@@ -21,7 +21,7 @@ async fn write<T: ViewMut<Item = i64> + Send>(mut sink: T, block: usize, count: 
 async fn process<T: ViewMut<Item = i64> + Send>(mut view: T) {
     let mut rng = SmallRng::from_entropy();
     loop {
-        let count = rng.gen_range(1, BUFFER_SIZE / 2);
+        let count = rng.gen_range(1..BUFFER_SIZE / 2);
         view.grant(count).await.unwrap();
         if view.view().is_empty() {
             break;
@@ -38,7 +38,7 @@ async fn read<T: View<Item = i64> + Send>(mut source: T, processed: bool) -> u64
     let mut rng = SmallRng::from_entropy();
     let factor = if processed { -1 } else { 1 };
     loop {
-        let count = rng.gen_range(1, BUFFER_SIZE / 2);
+        let count = rng.gen_range(1..BUFFER_SIZE / 2);
         source.grant(count).await.unwrap();
         if source.view().is_empty() {
             break hasher.finish();

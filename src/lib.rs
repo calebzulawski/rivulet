@@ -9,6 +9,17 @@
 //! * **Contiguous views**: Data is always contiguous, accessible by a single slice.
 //! * **Modular**: Pipelines can be combined and reused using common interfaces.
 //!
+//! # Getting started
+//!
+//! The most basic interface is a [`View`].
+//! Streams of data in `rivulet` are like slices, but you can't access the entire slice at once.
+//! A [`View`] is sliding window over the stream, only requiring a small portion of the stream to
+//! be in memory.
+//!
+//! A [`SplittableView`] is a special view that can split into multiple, simultaneously available views for use with multiple readers and writers.
+//!
+//! This crate provides a few stream implementations, but the most notable is the [`mod@circular_buffer`], which is optimized for asynchronous contiguous data access.
+//!
 //! # Example
 //!
 //! Let's create a simple averaging downsampler pipeline.
@@ -17,8 +28,8 @@
 //! use rivulet::{View, ViewMut};
 //! use futures::future::TryFutureExt;
 //!
-//! /// This function reads samples from the source pipeline, averages them,
-//! /// and writes the average to the sink pipeline.
+//! /// This function reads samples from the source, averages them,
+//! /// and writes the average to the sink.
 //! async fn downsample(
 //!     mut source: impl View<Item=f32>,
 //!     mut sink: impl ViewMut<Item=f32>,
@@ -59,5 +70,5 @@ pub mod splittable;
 pub mod view;
 
 pub use circular_buffer::circular_buffer;
-pub use splittable::Splittable;
+pub use splittable::SplittableView;
 pub use view::{View, ViewMut};

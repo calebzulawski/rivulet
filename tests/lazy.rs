@@ -1,5 +1,5 @@
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-use rivulet::{circular_buffer, lazy, Splittable, View, ViewMut};
+use rivulet::{circular_buffer, lazy, SplittableView, View, ViewMut};
 use std::hash::Hasher;
 
 static BUFFER_SIZE: usize = 4096;
@@ -26,7 +26,7 @@ async fn read<T: View<Item = i64> + Send + Unpin>(mut source: T) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     let mut rng = SmallRng::from_entropy();
     loop {
-        let count = rng.gen_range(1, BUFFER_SIZE);
+        let count = rng.gen_range(1..BUFFER_SIZE);
         source.grant(count).await.unwrap();
         if source.view().is_empty() {
             break hasher.finish();

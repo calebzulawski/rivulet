@@ -1,4 +1,6 @@
-use crate::splittable::{Splittable, SplittableImpl, SplittableImplMut, SplittableMut};
+use crate::splittable::{
+    SplittableView, SplittableViewImpl, SplittableViewImplMut, SplittableViewMut,
+};
 use once_cell::sync::OnceCell;
 use std::{
     convert::TryInto,
@@ -12,7 +14,7 @@ use std::{
 
 pub(super) fn make_sequence<T>(splittable: T) -> (First<T>, Second<T>)
 where
-    T: Splittable,
+    T: SplittableView,
 {
     let shared = Arc::new(Shared {
         splittable,
@@ -32,7 +34,7 @@ where
 
 struct Shared<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     splittable: T,
     head: AtomicU64,
@@ -40,10 +42,10 @@ where
     waker: Mutex<Option<Box<dyn Fn() + Send + Sync + 'static>>>,
 }
 
-/// The first `Splittable` produced by [`sequence`](`crate::Splittable::sequence`).
+/// The first `SplittableView` produced by [`sequence`](`crate::SplittableView::sequence`).
 pub struct First<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     shared: Arc<Shared<T>>,
     waker: OnceCell<Box<dyn Fn() + Send + Sync + 'static>>,
@@ -51,7 +53,7 @@ where
 
 impl<T> Drop for First<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn drop(&mut self) {
         self.shared.closed.store(true, Ordering::Relaxed);
@@ -61,7 +63,7 @@ where
 
 impl<T> First<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn wake_second(&self) {
         if let Ok(waker) = self.waker.get_or_try_init(|| {
@@ -73,9 +75,9 @@ where
     }
 }
 
-unsafe impl<T> SplittableImpl for First<T>
+unsafe impl<T> SplittableViewImpl for First<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     type Item = T::Item;
     type Error = T::Error;
@@ -133,26 +135,26 @@ where
     }
 }
 
-unsafe impl<T> SplittableImplMut for First<T>
+unsafe impl<T> SplittableViewImplMut for First<T>
 where
-    T: SplittableMut,
+    T: SplittableViewMut,
 {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item] {
         self.shared.splittable.view_mut(index, len)
     }
 }
 
-/// The second `Splittable` produced by [`sequence`](`crate::Splittable::sequence`).
+/// The second `SplittableView` produced by [`sequence`](`crate::SplittableView::sequence`).
 pub struct Second<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     shared: Arc<Shared<T>>,
 }
 
 impl<T> Drop for Second<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn drop(&mut self) {
         self.shared.closed.store(true, Ordering::Relaxed);
@@ -170,7 +172,7 @@ where
 
 impl<T> Second<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     fn readable_len(&self, start: u64) -> usize {
         (self.shared.head.load(Ordering::Relaxed) - start)
@@ -179,9 +181,9 @@ where
     }
 }
 
-unsafe impl<T> SplittableImpl for Second<T>
+unsafe impl<T> SplittableViewImpl for Second<T>
 where
-    T: Splittable,
+    T: SplittableView,
 {
     type Item = T::Item;
     type Error = T::Error;
@@ -228,9 +230,9 @@ where
     }
 }
 
-unsafe impl<T> SplittableImplMut for Second<T>
+unsafe impl<T> SplittableViewImplMut for Second<T>
 where
-    T: SplittableMut,
+    T: SplittableViewMut,
 {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item] {
         self.shared.splittable.view_mut(index, len)

@@ -6,7 +6,7 @@
 //! of the buffer.
 use crate::{
     error::GrantOverflow,
-    splittable::{SplittableImpl, SplittableImplMut},
+    splittable::{SplittableViewImpl, SplittableViewImplMut},
     View, ViewMut,
 };
 use futures::task::AtomicWaker;
@@ -253,7 +253,7 @@ impl<T> Drop for Source<T> {
     }
 }
 
-unsafe impl<T> SplittableImpl for Source<T> {
+unsafe impl<T> SplittableViewImpl for Source<T> {
     type Item = T;
     type Error = GrantOverflow;
 
@@ -326,7 +326,7 @@ unsafe impl<T> SplittableImpl for Source<T> {
     }
 }
 
-unsafe impl<T> SplittableImplMut for Source<T> {
+unsafe impl<T> SplittableViewImplMut for Source<T> {
     unsafe fn view_mut(&self, index: u64, len: usize) -> &mut [Self::Item] {
         self.state.buffer.range_mut(index, len)
     }

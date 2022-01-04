@@ -15,13 +15,13 @@ mod sequence;
 use sequence::make_sequence;
 pub use sequence::{First, Second};
 
-/// The implementation behind [`Splittable`].
+/// The implementation behind [`SplittableView`].
 ///
-/// Unless you are manually implementing a view, you should use [`Splittable`] directly.
+/// Unless you are manually implementing a view, you should use [`SplittableView`] directly.
 ///
 /// # Safety
 /// The implementation must satisfy the various interior mutability conditions specified in each method.
-pub unsafe trait SplittableImpl: Sized + Unpin {
+pub unsafe trait SplittableViewImpl: Sized + Unpin {
     /// The streamed type.
     type Item;
 
@@ -75,18 +75,18 @@ pub unsafe trait SplittableImpl: Sized + Unpin {
     unsafe fn view(&self, index: u64, len: usize) -> &[Self::Item];
 }
 
-/// The implementation behind [`SplittableMut`].
+/// The implementation behind [`SplittableViewMut`].
 ///
-/// Unless you are manually implementing a view, you should use [`SplittableMut`] directly.
+/// Unless you are manually implementing a view, you should use [`SplittableViewMut`] directly.
 ///
 /// # Safety
 /// The implementation must satisfy the various interior mutability conditions specified in each method.
-pub unsafe trait SplittableImplMut: SplittableImpl {
+pub unsafe trait SplittableViewImplMut: SplittableViewImpl {
     /// Obtain a mutable view into the stream.
     ///
     /// # Safety
     /// * The parameters must be within an available window as returned by
-    /// [`poll_available`](`SplittableImpl::poll_available`).
+    /// [`poll_available`](`SplittableViewImpl::poll_available`).
     /// * The view must not overlap with any other view of this stream.
     ///
     /// Note that this function produces a mutable reference from a regular reference.
@@ -97,7 +97,7 @@ pub unsafe trait SplittableImplMut: SplittableImpl {
 }
 
 /// A view that can be split for use with multiple readers.
-pub trait Splittable: SplittableImpl {
+pub trait SplittableView: SplittableViewImpl {
     /// Create a view for a single reader.
     fn into_view(self) -> View<Self> {
         View::new(self)
@@ -116,7 +116,7 @@ pub trait Splittable: SplittableImpl {
 }
 
 /// A mutable view that can be split for use with multiple readers.
-pub trait SplittableMut: Splittable + SplittableImplMut {}
+pub trait SplittableViewMut: SplittableView + SplittableViewImplMut {}
 
-impl<T> Splittable for T where T: SplittableImpl {}
-impl<T> SplittableMut for T where T: Splittable + SplittableImplMut {}
+impl<T> SplittableView for T where T: SplittableViewImpl {}
+impl<T> SplittableViewMut for T where T: SplittableView + SplittableViewImplMut {}
