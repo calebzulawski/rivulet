@@ -10,7 +10,7 @@
 <h2 id="getting-started" class="section-header"><a href="#getting-started">Getting started</a></h2>
 <p>The most basic interface is a <a href="view/trait.View.html" title="View"><code>View</code></a>.
 Streams of data in <code>rivulet</code> are like slices, but you can’t access the entire slice at once.
-A <a href="view/trait.View.html" title="View"><code>View</code></a> is sliding window over the stream, only requiring a small portion of the stream to
+A <a href="view/trait.View.html" title="View"><code>View</code></a> is sliding window over the stream, requiring only a small portion of the stream to
 be in memory.</p>
 <p>A <a href="splittable/trait.SplittableView.html" title="SplittableView"><code>SplittableView</code></a> is a special view that can split into multiple, simultaneously available views for use with multiple readers and writers.</p>
 <p>This crate provides a few stream implementations, but the most notable is the <a href="circular_buffer/index.html" title="circular_buffer"><code>circular_buffer</code></a>, which is optimized for asynchronous contiguous data access.</p>
