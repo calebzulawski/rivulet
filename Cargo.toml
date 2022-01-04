@@ -7,7 +7,7 @@ description = "Asynchronous contiguous-memory streams"
 repository = "https://github.com/calebzulawski/rivulet"
 categories = ["asynchronous", "memory-management"]
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["std"]
