@@ -1,7 +1,7 @@
 <img src="icon.png" alt="icon" height="25" />Rivulet
 =======
 [![Build Status](https://github.com/calebzulawski/rivulet/workflows/Build/badge.svg?branch=master)](https://github.com/calebzulawski/rivulet/actions)
-![Rustc Version 1.56+](https://img.shields.io/badge/rustc-1.56+-lightgray.svg)
+![Rustc Version 1.63+](https://img.shields.io/badge/rustc-1.63+-lightgray.svg)
 [![License](https://img.shields.io/crates/l/rivulet)](https://crates.io/crates/rivulet)
 [![Crates.io](https://img.shields.io/crates/v/rivulet)](https://crates.io/crates/rivulet)
 [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/rivulet)
