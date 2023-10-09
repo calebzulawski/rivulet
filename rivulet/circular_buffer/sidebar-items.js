@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["circular_buffer","Create a circular buffer that can hold at least `min_size` elements."]],"struct":[["Sink","The writer of a circular buffer."],["Source","The reader of a circular buffer."]]});
+window.SIDEBAR_ITEMS = {"fn":["circular_buffer"],"struct":["Sink","Source"]};

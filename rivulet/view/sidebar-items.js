@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Grant","Future produced by [`View::grant`]."],["MapError","An error-mapped view produced by [`View::map_error`]."]],"trait":[["View","Obtain views into asynchronous contiguous-memory streams."],["ViewMut","Obtain mutable views into asynchronous contiguous-memory mutable streams."]]});
+window.SIDEBAR_ITEMS = {"struct":["Grant","MapError"],"trait":["View","ViewMut"]};

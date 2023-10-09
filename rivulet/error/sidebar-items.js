@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["GrantOverflow","Error produced when a request is too large to grant."]]});
+window.SIDEBAR_ITEMS = {"struct":["GrantOverflow"]};

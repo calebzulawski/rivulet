@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["lazy_channel","Create a lazy-initialized channel."]],"struct":[["Lazy","A lazy-initialized view."],["LazyChannelSink","A sink created by [`lazy_channel`]."],["LazyChannelSource","A source created by [`lazy_channel`]."]]});
+window.SIDEBAR_ITEMS = {"fn":["lazy_channel"],"struct":["Lazy","LazyChannelSink","LazyChannelSource"]};

@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Slice","Treats a slice as a stream."],["SliceMut","Treats a mutable slice as a stream."]]});
+window.SIDEBAR_ITEMS = {"struct":["Slice","SliceMut"]};

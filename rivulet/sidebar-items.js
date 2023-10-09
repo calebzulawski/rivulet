@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["circular_buffer","An asynchronous copy-free circular buffer."],["error","Errors produced by streams."],["io","Utilities for working with [`std::io`]."],["lazy","Lazy-initialized streams."],["slice","Utilities for working with slices."],["splittable","Streams that can be split into multiple views."],["view","Views into asynchronous streams."]]});
+window.SIDEBAR_ITEMS = {"mod":["circular_buffer","error","io","lazy","slice","splittable","view"]};

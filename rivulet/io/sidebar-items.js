@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["AsyncReader","Implements `futures::io::AsyncRead` for a [`View`]."],["AsyncWriter","Implements `futures::io::AsyncWrite` for a [`ViewMut`]."],["Reader","Implements [`std::io::Read`] for a [`View`]."],["Writer","Implements [`std::io::Write`] for a [`ViewMut`]."]]});
+window.SIDEBAR_ITEMS = {"struct":["AsyncReader","AsyncWriter","Reader","Writer"]};
