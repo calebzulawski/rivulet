@@ -26,7 +26,7 @@ where
 }
 
 /// Obtain views into asynchronous contiguous-memory streams.
-pub trait View: Sized + Unpin {
+pub trait View: Unpin {
     /// The streamed type.
     type Item;
 
@@ -60,7 +60,10 @@ pub trait View: Sized + Unpin {
     /// Create a future that obtains a view of at least `count` elements.
     ///
     /// See [`poll_grant`](`Self::poll_grant`).
-    fn grant(&mut self, count: usize) -> Grant<'_, Self> {
+    fn grant(&mut self, count: usize) -> Grant<'_, Self>
+    where
+        Self: Sized,
+    {
         Grant {
             handle: self,
             count,
@@ -70,13 +73,17 @@ pub trait View: Sized + Unpin {
     /// Obtains a view of at least `count` elements, blocking the current thread.
     ///
     /// See [`poll_grant`](`View::poll_grant`).
-    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::Error> {
+    fn blocking_grant(&mut self, count: usize) -> Result<(), Self::Error>
+    where
+        Self: Sized,
+    {
         futures::executor::block_on(self.grant(count))
     }
 
     /// Maps this view to a new view producing error `E`.
     fn map_error<E, F>(self, f: F) -> MapError<Self, E, F>
     where
+        Self: Sized,
         F: Fn(Self::Error) -> E,
     {
         MapError {
